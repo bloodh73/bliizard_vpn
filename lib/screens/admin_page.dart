@@ -79,6 +79,48 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getAllUsers() async {
+    final response = await supabase
+        .from('users')
+        .select('''*,
+        connection_logs:connection_logs(count)''')
+        .order('created_at', ascending: false);
+
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  Future<List<Map<String, dynamic>>> getExpiringUsers(int daysThreshold) async {
+    final response = await supabase
+        .from('users')
+        .select()
+        .lt(
+          'expiry_date',
+          DateTime.now().add(Duration(days: daysThreshold)).toIso8601String(),
+        )
+        .order('expiry_date', ascending: true);
+
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  Future<List<Map<String, dynamic>>> getHighUsageUsers(
+    double thresholdPercent,
+  ) async {
+    final response = await supabase
+        .from('users')
+        .select()
+        .filter(
+          'data_usage',
+          'gt',
+          supabase.rpc(
+            'multiply',
+            params: {'a': 'data_limit', 'b': thresholdPercent},
+          ),
+        )
+        .order('data_usage', ascending: false);
+
+    return List<Map<String, dynamic>>.from(response);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

@@ -67,23 +67,44 @@ class _ServerSelectionPageState extends State<ServerSelectionPage> {
           ),
         ],
       ),
-      body: ListView.builder(
-        itemCount: appState.servers.length,
-        itemBuilder: (context, index) {
-          final server = appState.servers[index];
-          return Card(
-            child: ListTile(
-              title: Text(server.remark),
-              trailing: appState.selectedServer == server
-                  ? const Icon(Icons.check, color: Colors.green)
-                  : null,
-              onTap: () {
-                appState.selectedServer = server;
-                Navigator.pop(context);
-              },
-            ),
-          );
-        },
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.grey[900]!, Colors.grey[850]!],
+          ),
+        ),
+        child: ListView.builder(
+          itemCount: appState.servers.length,
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              child: Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  leading: const Icon(Icons.cloud, color: Colors.blueAccent),
+                  title: Text(
+                    appState.servers[index].remark,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    appState.selectedServer = appState.servers[index];
+                    Navigator.pop(context, true); // تغییر این خط
+                  },
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

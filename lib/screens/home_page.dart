@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:blizzard_vpn/models/app_state.dart';
 import 'package:flutter/material.dart';
@@ -14,13 +15,174 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  bool isLoading = false;
+  double _buttonScale = 1.0;
+  bool _isAnimating = false;
   final supabase = Supabase.instance.client;
   var v2rayStatus = ValueNotifier<V2RayStatus>(V2RayStatus());
-  late final FlutterV2ray flutterV2ray = FlutterV2ray(
+  late final flutterV2ray = FlutterV2ray(
     onStatusChanged: (status) {
       v2rayStatus.value = status;
     },
   );
+
+  Widget _buildUserDrawer() {
+    return Drawer(
+      width: MediaQuery.of(context).size.width * 0.8,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Colors.blue[900]!, Colors.blue[700]!],
+          ),
+        ),
+        child: Column(
+          children: [
+            UserAccountsDrawerHeader(
+              accountName: Text(
+                userProfile?['full_name'] ?? 'Guest',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              accountEmail: Text(
+                supabase.auth.currentUser?.email ?? 'No email',
+                style: TextStyle(fontSize: 14),
+              ),
+              currentAccountPicture: CircleAvatar(
+                backgroundColor: Colors.white,
+                child: Icon(Icons.person, color: Colors.blue, size: 40),
+              ),
+              decoration: BoxDecoration(color: Colors.transparent),
+            ),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  _buildDrawerItem(
+                    icon: Icons.calendar_today,
+                    title: 'Subscription Expiry',
+                    value: userProfile?['expiry_date'] != null
+                        ? _formatDate(userProfile!['expiry_date'])
+                        : 'Not set',
+                  ),
+                  _buildDrawerDivider(),
+                  _buildDrawerItem(
+                    icon: Icons.data_usage,
+                    title: 'Data Usage',
+                    value: userProfile?['data_usage'] != null
+                        ? '${_formatBytes(userProfile!['data_usage'])} / ${_formatBytes(userProfile!['data_limit'])}'
+                        : '0 / 0',
+                    isProgress: true,
+                    progressValue:
+                        userProfile?['data_usage'] != null &&
+                            userProfile?['data_limit'] != null &&
+                            userProfile!['data_limit'] > 0
+                        ? (userProfile!['data_usage'] /
+                                  userProfile!['data_limit'])
+                              .clamp(0.0, 1.0)
+                        : 0.0,
+                  ),
+                  _buildDrawerDivider(),
+                  _buildDrawerItem(
+                    icon: Icons.account_circle,
+                    title: 'Account Type',
+                    value:
+                        userProfile?['subscription_type']
+                            ?.toString()
+                            .toUpperCase() ??
+                        'FREE',
+                  ),
+                  _buildDrawerDivider(),
+                  _buildDrawerItem(
+                    icon: Icons.settings,
+                    title: 'Settings',
+                    onTap: () {
+                      // Navigate to settings page
+                    },
+                  ),
+                  _buildDrawerDivider(),
+                  ListTile(
+                    leading: Icon(Icons.logout, color: Colors.white),
+                    title: Text(
+                      'Logout',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    onTap: _handleLogout,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String title,
+    String? value,
+    bool isProgress = false,
+    double progressValue = 0.0,
+    VoidCallback? onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.white),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(color: Colors.white70)),
+          if (value != null)
+            Text(
+              value,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          if (isProgress)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: LinearProgressIndicator(
+                value: progressValue,
+                backgroundColor: Colors.blue[800],
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  progressValue > 0.8 ? Colors.red : Colors.green,
+                ),
+              ),
+            ),
+        ],
+      ),
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildDrawerDivider() {
+    return Divider(
+      color: Colors.blue[800],
+      height: 1,
+      thickness: 1,
+      indent: 16,
+      endIndent: 16,
+    );
+  }
+
+  String _formatDate(String dateString) {
+    try {
+      final date = DateTime.parse(dateString);
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (e) {
+      return dateString;
+    }
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const suffixes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var i = (log(bytes) / log(1024)).floor();
+    return '${(bytes / pow(1024, i)).toStringAsFixed(1)} ${suffixes[i]}';
+  }
 
   String? coreVersion;
   bool isConnecting = false;
@@ -53,6 +215,55 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       _showErrorSnackbar('Failed to initialize V2Ray: $e');
     }
+  }
+
+  Future<void> updateUserDataUsage(String userId, int bytesUsed) async {
+    await supabase
+        .from('users')
+        .update({
+          'data_usage': supabase.rpc('increment', params: {'value': bytesUsed}),
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', userId);
+  }
+
+  Future<void> renewUserSubscription(String userId, int daysToAdd) async {
+    await supabase
+        .from('users')
+        .update({
+          'expiry_date': supabase.rpc(
+            'add_days',
+            params: {'date': 'expiry_date', 'num_days': daysToAdd},
+          ),
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', userId);
+  }
+
+  Future<void> increaseDataLimit(String userId, int additionalBytes) async {
+    await supabase
+        .from('users')
+        .update({
+          'data_limit': supabase.rpc(
+            'increment',
+            params: {'value': additionalBytes},
+          ),
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', userId);
+  }
+
+  Future<Map<String, dynamic>> getCurrentUserProfile() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) throw Exception('User not authenticated');
+
+    final response = await supabase
+        .from('users')
+        .select()
+        .eq('id', user.id)
+        .single();
+
+    return response;
   }
 
   Future<void> _loadUserProfile() async {
@@ -215,7 +426,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> fetchSubscriptionFromSupabase() async {
-    bool isLoading = false;
     if (!mounted) return;
 
     setState(() => isLoading = true);
@@ -281,6 +491,7 @@ class _HomePageState extends State<HomePage> {
         );
 
         await _logConnection(user.id, appState.selectedServer!.remark);
+        setState(() {}); // Force UI update
       } else {
         _showErrorSnackbar('Permission denied');
       }
@@ -328,27 +539,23 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
+      drawer: _buildUserDrawer(),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // User Profile Card
             _buildUserProfileCard(user),
             const SizedBox(height: 20),
-
-            // Server Selection Card
             _buildServerCard(appState),
+
             const SizedBox(height: 20),
-
-            // Connection Status
             _buildConnectionStatus(),
-            const SizedBox(height: 30),
-
-            // Connect Button
-            _buildConnectButton(),
             const Spacer(),
-
-            // App Version
+            Padding(
+              padding: const EdgeInsets.only(bottom: 40),
+              child: _buildConnectButton(),
+            ),
+            const Spacer(),
             if (coreVersion != null)
               Text(
                 'V2Ray Core v$coreVersion',
@@ -359,32 +566,68 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+  //           // App Version
+  //           if (coreVersion != null)
+  //             Text(
+  //               'V2Ray Core v$coreVersion',
+  //               style: TextStyle(color: Colors.grey[600]),
+  //             ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _buildUserProfileCard(User? user) {
     return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.account_circle, size: 40),
-              title: Text(
-                userProfile?['full_name'] ?? 'Guest User',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(user?.email ?? 'No email'),
-              trailing: Chip(
-                label: Text(
-                  userProfile?['subscription_type']?.toUpperCase() ?? 'FREE',
-                  style: const TextStyle(fontSize: 12),
-                ),
-                backgroundColor: Colors.blue[100],
-              ),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Scaffold.of(context).openDrawer();
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Colors.blue[800]!, Colors.blue[600]!],
             ),
-            if (isProfileLoading) const LinearProgressIndicator(),
-          ],
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.account_circle, size: 40),
+                  title: Text(
+                    userProfile?['full_name'] ?? 'Guest User',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(user?.email ?? 'No email'),
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (userProfile?['expiry_date'] != null)
+                        Text(
+                          _formatDate(userProfile!['expiry_date']),
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      if (userProfile?['data_usage'] != null &&
+                          userProfile?['data_limit'] != null)
+                        Text(
+                          '${_formatBytes(userProfile!['data_usage'])} / ${_formatBytes(userProfile!['data_limit'])}',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                    ],
+                  ),
+                ),
+                if (isProfileLoading) const LinearProgressIndicator(),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -401,8 +644,11 @@ class _HomePageState extends State<HomePage> {
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () {
-          Navigator.pushNamed(context, '/servers');
+        onTap: () async {
+          final result = await Navigator.pushNamed(context, '/servers');
+          if (result == true) {
+            setState(() {}); // به‌روزرسانی وضعیت
+          }
         },
       ),
     );
@@ -414,21 +660,14 @@ class _HomePageState extends State<HomePage> {
       builder: (context, status, _) {
         return Column(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              decoration: BoxDecoration(
-                color: _getStatusColor(status.state),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                _getStatusText(status.state),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ),
+            // Text(
+            //   _getStatusText(status.state),
+            //   style: const TextStyle(
+            //     color: Colors.white,
+            //     fontWeight: FontWeight.bold,
+            //     fontSize: 16,
+            //   ),
+            // ),
             const SizedBox(height: 10),
             if (status.state == 'CONNECTED') ...[
               Text('Duration: ${status.duration}'),
@@ -438,17 +677,13 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   _buildSpeedIndicator(
                     Icons.upload,
-                    status.uploadSpeed.bitLength == 0
-                        ? '0'
-                        : status.uploadSpeed.bitLength.toString(),
+                    '${_formatSpeed(status.uploadSpeed)}',
                     Colors.blue,
                   ),
                   const SizedBox(width: 30),
                   _buildSpeedIndicator(
                     Icons.download,
-                    status.downloadSpeed.bitLength == 0
-                        ? '0'
-                        : status.downloadSpeed.bitLength.toString(),
+                    '${_formatSpeed(status.downloadSpeed)}',
                     Colors.green,
                   ),
                 ],
@@ -458,6 +693,16 @@ class _HomePageState extends State<HomePage> {
         );
       },
     );
+  }
+
+  String _formatSpeed(int speed) {
+    if (speed < 1024) {
+      return '$speed B/s';
+    } else if (speed < 1024 * 1024) {
+      return '${(speed / 1024).toStringAsFixed(1)} KB/s';
+    } else {
+      return '${(speed / (1024 * 1024)).toStringAsFixed(1)} MB/s';
+    }
   }
 
   Widget _buildSpeedIndicator(IconData icon, String speed, Color color) {
@@ -471,31 +716,117 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildConnectButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: isConnecting
-            ? null
-            : v2rayStatus.value.state == 'CONNECTED'
-            ? () => flutterV2ray.stopV2Ray()
-            : connect,
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          backgroundColor: _getButtonColor(v2rayStatus.value.state),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: isConnecting
-            ? const CircularProgressIndicator(color: Colors.white)
-            : Text(
-                _getButtonText(v2rayStatus.value.state),
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+    return ValueListenableBuilder<V2RayStatus>(
+      valueListenable: v2rayStatus,
+      builder: (context, status, _) {
+        final isConnected = status.state == 'CONNECTED';
+        final buttonText = isConnected ? 'DISCONNECT' : 'CONNECT';
+        final buttonColor = isConnected ? Colors.red : Colors.green;
+
+        return Center(
+          child: GestureDetector(
+            onTapDown: (_) {
+              if (!isConnecting && !_isAnimating) {
+                setState(() {
+                  _buttonScale = 0.95;
+                  _isAnimating = true;
+                });
+              }
+            },
+            onTapUp: (_) async {
+              if (!isConnecting && !_isAnimating) return;
+
+              setState(() => _buttonScale = 1.0);
+
+              await Future.delayed(const Duration(milliseconds: 100));
+
+              setState(() => _isAnimating = false);
+
+              if (isConnected) {
+                await flutterV2ray.stopV2Ray();
+              } else {
+                await connect();
+              }
+            },
+            onTapCancel: () {
+              if (!isConnecting && !_isAnimating) return;
+              setState(() {
+                _buttonScale = 1.0;
+                _isAnimating = false;
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              transform: Matrix4.identity()..scale(_buttonScale),
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: buttonColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: buttonColor.withOpacity(0.5),
+                    blurRadius: 15,
+                    spreadRadius: isConnected ? 0 : 5,
+                  ),
+                ],
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    buttonColor.withOpacity(0.9),
+                    buttonColor.withOpacity(0.7),
+                  ],
                 ),
               ),
-      ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (isConnecting)
+                    CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      strokeWidth: 3,
+                    )
+                  else
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          isConnected ? Icons.power_settings_new : Icons.power,
+                          size: 32,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          buttonText,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (isConnected && !isConnecting)
+                    Positioned.fill(
+                      child: AnimatedOpacity(
+                        opacity: _isAnimating ? 0.6 : 0.0,
+                        duration: const Duration(milliseconds: 500),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: buttonColor.withOpacity(0.4),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -509,35 +840,5 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       _showErrorSnackbar('Logout failed: $e');
     }
-  }
-
-  Color _getStatusColor(String state) {
-    switch (state) {
-      case 'CONNECTED':
-        return Colors.green;
-      case 'CONNECTING':
-        return Colors.orange;
-      default:
-        return Colors.red;
-    }
-  }
-
-  String _getStatusText(String state) {
-    switch (state) {
-      case 'CONNECTED':
-        return 'CONNECTED';
-      case 'CONNECTING':
-        return 'CONNECTING...';
-      default:
-        return 'DISCONNECTED';
-    }
-  }
-
-  Color _getButtonColor(String state) {
-    return state == 'CONNECTED' ? Colors.red : Colors.green;
-  }
-
-  String _getButtonText(String state) {
-    return state == 'CONNECTED' ? 'DISCONNECT' : 'CONNECT';
   }
 }

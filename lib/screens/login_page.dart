@@ -244,25 +244,47 @@ class _LoginPageState extends State<LoginPage> {
                   onPressed: _isLoading ? null : _handleAuth,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    backgroundColor: Colors.blueAccent,
                   ),
                   child: _isLoading
-                      ? const CircularProgressIndicator()
-                      : Text(_isSignUp ? 'Sign Up' : 'Login'),
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(
+                          _isSignUp ? 'Sign Up' : 'Login',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: () {
-                    setState(() {
-                      _isSignUp = !_isSignUp;
-                      _errorMessage = '';
-                    });
+                    setState(() => _isSignUp = !_isSignUp);
                   },
-                  child: Text(
-                    _isSignUp
-                        ? 'Already have an account? Login'
-                        : 'Don\'t have an account? Sign Up',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.blueAccent, Colors.cyanAccent],
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 24,
+                    ),
+                    child: Text(
+                      _isSignUp
+                          ? 'Already have an account? Login'
+                          : 'Create an account',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
+                const SizedBox(height: 16),
                 TextButton(
                   onPressed: _isSignUp
                       ? null
