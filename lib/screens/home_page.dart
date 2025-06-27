@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
-
+import '../utils/date_utils.dart' as date_utils;
 import 'package:blizzard_vpn/models/app_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
@@ -60,10 +60,10 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   _buildDrawerItem(
                     icon: Icons.calendar_today,
-                    title: 'Subscription Expiry',
+                    title: 'Expry Date',
                     value: userProfile?['expiry_date'] != null
-                        ? _formatDate(userProfile!['expiry_date'])
-                        : 'Not set',
+                        ? date_utils.formatToJalali(userProfile!['expiry_date'])
+                        : 'No Set',
                   ),
                   _buildDrawerDivider(),
                   _buildDrawerItem(
@@ -169,12 +169,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _formatDate(String dateString) {
-    try {
-      final date = DateTime.parse(dateString);
-      return '${date.day}/${date.month}/${date.year}';
-    } catch (e) {
-      return dateString;
-    }
+    return date_utils.formatToJalali(dateString);
   }
 
   String _formatBytes(int bytes) {

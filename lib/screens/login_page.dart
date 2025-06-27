@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shamsi_date/shamsi_date.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -26,6 +27,33 @@ class _LoginPageState extends State<LoginPage> {
   void initState() {
     super.initState();
     _checkRememberedUser();
+  }
+
+  String formatToJalali(String? isoDate) {
+    if (isoDate == null || isoDate.isEmpty) return 'نامشخص';
+
+    try {
+      final gregorian = DateTime.parse(isoDate);
+      final jalali = gregorian.toJalali();
+      final monthNames = [
+        '',
+        'فروردین',
+        'اردیبهشت',
+        'خرداد',
+        'تیر',
+        'مرداد',
+        'شهریور',
+        'مهر',
+        'آبان',
+        'آذر',
+        'دی',
+        'بهمن',
+        'اسفند',
+      ];
+      return '${jalali.day} ${monthNames[jalali.month]} ${jalali.year}';
+    } catch (e) {
+      return isoDate;
+    }
   }
 
   Future<void> _checkRememberedUser() async {

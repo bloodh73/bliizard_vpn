@@ -256,6 +256,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "4.1.2"
+  intl:
+    dependency: "direct main"
+    description:
+      name: intl
+      sha256: "3df61194eb431efc39c4ceba583b95633a403f46c9fd341e550ce0bfa50e9aa5"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.20.2"
   js:
     dependency: transitive
     description:
@@ -408,6 +416,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "2.3.0"
+  persian_tools:
+    dependency: "direct main"
+    description:
+      name: persian_tools
+      sha256: f7f03b786f2bca07e2fb96bb56310218708ce9b049e0fe56cac71317f92afab0
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.0.3"
   platform:
     dependency: transitive
     description:
@@ -464,6 +480,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "0.28.0"
+  shamsi_date:
+    dependency: "direct main"
+    description:
+      name: shamsi_date
+      sha256: b6c79ff34ddfb1e9e4761347f18e30afdd7d16cc3db77defd5a40e2d93894c51
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.1.0"
   shared_preferences:
     dependency: "direct main"
     description:
