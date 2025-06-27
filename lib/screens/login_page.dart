@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -9,130 +10,278 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-  bool isLoading = false;
-  String errorMessage = '';
-  bool isSignUp = false;
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
+  String _errorMessage = '';
+  bool _isSignUp = false;
+  bool _obscurePassword = true;
+  bool _rememberMe = false;
 
-  final supabase = Supabase.instance.client;
+  final _supabase = Supabase.instance.client;
+  final _storage = const FlutterSecureStorage();
+  final _formKey = GlobalKey<FormState>();
 
-  Future<void> _handleLogin() async {
-    setState(() {
-      isLoading = true;
-      errorMessage = '';
-    });
+  @override
+  void initState() {
+    super.initState();
+    _checkRememberedUser();
+  }
 
+  Future<void> _checkRememberedUser() async {
     try {
-      final email = emailController.text.trim();
-      final password = passwordController.text.trim();
-
-      if (email.isEmpty || password.isEmpty) {
-        throw Exception('Please enter both email and password');
-      }
-
-      if (isSignUp) {
-        // ثبت نام کاربر جدید
-        final response = await supabase.auth.signUp(
-          email: email,
-          password: password,
-        );
-
-        if (response.user == null) {
-          throw Exception('Sign up failed');
-        }
-      } else {
-        // ورود کاربر موجود
-        final response = await supabase.auth.signInWithPassword(
-          email: email,
-          password: password,
-        );
-
-        if (response.user == null) {
-          throw Exception('Login failed');
-        }
-      }
-
-      // پس از ورود موفق، به صفحه اصلی هدایت می‌شویم
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
-      }
-    } catch (e) {
-      setState(() {
-        errorMessage = e.toString();
-      });
-    } finally {
-      if (mounted) {
+      final rememberedEmail = await _storage.read(key: 'remembered_email');
+      if (rememberedEmail != null) {
         setState(() {
-          isLoading = false;
+          _emailController.text = rememberedEmail;
+          _rememberMe = true;
         });
       }
+    } catch (e) {
+      debugPrint('Error loading remembered user: $e');
     }
   }
 
   @override
   void dispose() {
-    emailController.dispose();
-    passwordController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleAuth() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final email = _emailController.text.trim().toLowerCase();
+      final password = _passwordController.text.trim();
+
+      if (_rememberMe) {
+        await _storage.write(key: 'remembered_email', value: email);
+      } else {
+        await _storage.delete(key: 'remembered_email');
+      }
+
+      if (_isSignUp) {
+        final response = await _supabase.auth.signUp(
+          email: email,
+          password: password,
+        );
+
+        if (response.user == null) {
+          throw AuthException('Sign up failed. Please try again.');
+        }
+
+        await _createUserProfile(response.user!, email);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Registration successful! Please verify your email.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        setState(() => _isSignUp = false);
+      } else {
+        final response = await _supabase.auth.signInWithPassword(
+          email: email,
+          password: password,
+        );
+
+        if (response.user == null) {
+          throw AuthException('Invalid email or password');
+        }
+
+        if (response.user?.emailConfirmedAt == null) {
+          await _supabase.auth.signOut();
+          throw AuthException('Please verify your email first');
+        }
+
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      }
+    } on AuthException catch (e) {
+      setState(() => _errorMessage = _parseAuthError(e.message));
+    } catch (e) {
+      setState(() => _errorMessage = 'An unexpected error occurred');
+      debugPrint('Auth error: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _createUserProfile(User user, String email) async {
+    try {
+      await _supabase.from('users').upsert({
+        'id': user.id,
+        'email': email,
+        'full_name': email.split('@').first,
+        'subscription_type': 'free',
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('Profile creation error: $e');
+    }
+  }
+
+  String _parseAuthError(String message) {
+    if (message.contains('invalid login credentials')) {
+      return 'Invalid email or password';
+    }
+    if (message.contains('email not confirmed')) {
+      return 'Please verify your email first';
+    }
+    if (message.contains('User already registered')) {
+      return 'Email already registered. Please login instead.';
+    }
+    return message;
+  }
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
+
+  bool _isStrongPassword(String password) {
+    return password.length >= 6;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: _buildLoginForm(),
+      appBar: AppBar(
+        title: Text(_isSignUp ? 'Sign Up' : 'Login'),
+        centerTitle: true,
       ),
-    );
-  }
-
-  Widget _buildLoginForm() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        TextField(
-          controller: emailController,
-          decoration: const InputDecoration(
-            labelText: 'Email',
-            border: OutlineInputBorder(),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 40),
+                TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.email),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your email';
+                    }
+                    if (!_isValidEmail(value)) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _passwordController,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                      ),
+                      onPressed: () {
+                        setState(() => _obscurePassword = !_obscurePassword);
+                      },
+                    ),
+                  ),
+                  obscureText: _obscurePassword,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your password';
+                    }
+                    if (_isSignUp && !_isStrongPassword(value)) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Checkbox(
+                      value: _rememberMe,
+                      onChanged: (value) {
+                        setState(() => _rememberMe = value ?? false);
+                      },
+                    ),
+                    const Text('Remember me'),
+                  ],
+                ),
+                if (_errorMessage.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    _errorMessage,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _handleAuth,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator()
+                      : Text(_isSignUp ? 'Sign Up' : 'Login'),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _isSignUp = !_isSignUp;
+                      _errorMessage = '';
+                    });
+                  },
+                  child: Text(
+                    _isSignUp
+                        ? 'Already have an account? Login'
+                        : 'Don\'t have an account? Sign Up',
+                  ),
+                ),
+                TextButton(
+                  onPressed: _isSignUp
+                      ? null
+                      : () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Password reset link sent to email',
+                              ),
+                            ),
+                          );
+                        },
+                  child: const Text('Forgot password?'),
+                ),
+              ],
+            ),
           ),
-          keyboardType: TextInputType.emailAddress,
         ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: passwordController,
-          decoration: const InputDecoration(
-            labelText: 'Password',
-            border: OutlineInputBorder(),
-          ),
-          obscureText: true,
-        ),
-        const SizedBox(height: 20),
-        if (errorMessage.isNotEmpty)
-          Text(errorMessage, style: const TextStyle(color: Colors.red)),
-        const SizedBox(height: 20),
-        ElevatedButton(
-          onPressed: isLoading ? null : _handleLogin,
-          child: isLoading
-              ? const CircularProgressIndicator()
-              : Text(isSignUp ? 'Sign Up' : 'Login'),
-        ),
-        const SizedBox(height: 10),
-        TextButton(
-          onPressed: () {
-            setState(() {
-              isSignUp = !isSignUp;
-            });
-          },
-          child: Text(
-            isSignUp
-                ? 'Already have an account? Login'
-                : 'Don\'t have an account? Sign Up',
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

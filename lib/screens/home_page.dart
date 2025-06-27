@@ -1,6 +1,9 @@
-import 'package:blizzard_vpn/screens/server_selection_page.dart';
+import 'dart:convert';
+
+import 'package:blizzard_vpn/models/app_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HomePage extends StatefulWidget {
@@ -29,6 +32,9 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _initializeApp();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      refreshServers();
+    });
   }
 
   Future<void> _initializeApp() async {
@@ -59,9 +65,29 @@ class _HomePageState extends State<HomePage> {
           .from('users')
           .select()
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
-      setState(() => userProfile = response);
+      if (response == null) {
+        // Create default profile if doesn't exist
+        await supabase.from('users').insert({
+          'id': user.id,
+          'email': user.email,
+          'full_name': user.email?.split('@').first ?? 'User',
+          'subscription_type': 'free',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+
+        // Reload after creation
+        final newResponse = await supabase
+            .from('users')
+            .select()
+            .eq('id', user.id)
+            .single();
+
+        setState(() => userProfile = newResponse);
+      } else {
+        setState(() => userProfile = response);
+      }
     } catch (e) {
       _showErrorSnackbar('Failed to load profile: $e');
     } finally {
@@ -71,36 +97,167 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> refreshServers() async {
     final appState = AppState.instance;
-    if (appState.subscriptionLink == null) return;
-
     setState(() => isRefreshing = true);
 
     try {
-      final user = supabase.auth.currentUser;
-      if (user == null) throw Exception('User not authenticated');
-
       final response = await supabase
-          .from('user_subscriptions')
-          .select('subscription_link')
-          .eq('user_id', user.id)
-          .single();
+          .from('subscription_links')
+          .select()
+          .eq('is_active', true)
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
 
-      final subscriptionLink = response['subscription_link'] as String?;
-      if (subscriptionLink == null) {
-        throw Exception('No subscription found');
+      String subscriptionLink;
+
+      if (response == null || (response['url'] as String).isEmpty) {
+        subscriptionLink = _getFallbackUrl();
+      } else {
+        subscriptionLink = response['url'] as String;
       }
 
-      appState.subscriptionLink = subscriptionLink;
-      final v2rayURL = FlutterV2ray.parseFromURL(subscriptionLink);
+      if (!_isValidV2RayUrl(subscriptionLink)) {
+        throw Exception('Invalid URL format: $subscriptionLink');
+      }
+
+      final servers = await _downloadAndParseSubscription(subscriptionLink);
 
       setState(() {
-        appState.servers = [v2rayURL];
-        appState.selectedServer = v2rayURL;
+        appState.subscriptionLink = subscriptionLink;
+        appState.servers = servers;
+        appState.selectedServer = servers.isNotEmpty ? servers.first : null;
       });
     } catch (e) {
-      _showErrorSnackbar('Error updating servers: $e');
+      _showErrorSnackbar('Error loading subscription: ${e.toString()}');
+      await _tryFallbackConnection(appState);
     } finally {
       setState(() => isRefreshing = false);
+    }
+  }
+
+  bool _isValidV2RayUrl(String url) {
+    // قبول کردن هم URLهای مستقیم و هم لینک‌های سابسکریپشن
+    return url.startsWith('vmess://') ||
+        url.startsWith('vless://') ||
+        url.startsWith('ss://') ||
+        url.startsWith('trojan://') ||
+        url.startsWith('http://') ||
+        url.startsWith('https://');
+  }
+
+  Future<List<V2RayURL>> _downloadAndParseSubscription(String url) async {
+    try {
+      if (url.startsWith('http')) {
+        // دانلود محتوای سابسکریپشن
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode != 200) {
+          throw Exception('Failed to download subscription');
+        }
+
+        // پردازش محتوا (فرض بر این است که محتوا base64 encoded است)
+        final content = String.fromCharCodes(base64Decode(response.body));
+        final servers = content.split('\n');
+
+        // پردازش تمام سرورهای معتبر
+        final validServers = <V2RayURL>[];
+        for (final server in servers) {
+          if (server.trim().isEmpty) continue;
+
+          try {
+            if (server.startsWith('vmess://') ||
+                server.startsWith('vless://') ||
+                server.startsWith('ss://') ||
+                server.startsWith('trojan://')) {
+              final v2rayURL = FlutterV2ray.parseFromURL(server);
+              if (v2rayURL.remark.isNotEmpty) {
+                validServers.add(v2rayURL);
+              }
+            }
+          } catch (e) {
+            debugPrint('Error parsing server config: $e');
+          }
+        }
+
+        if (validServers.isEmpty) {
+          throw Exception('No valid servers found in subscription');
+        }
+
+        return validServers;
+      } else {
+        // اگر URL مستقیم بود
+        return [FlutterV2ray.parseFromURL(url)];
+      }
+    } catch (e) {
+      throw Exception('Failed to process subscription: ${e.toString()}');
+    }
+  }
+
+  String _getFallbackUrl() {
+    // Return a known-good fallback URL
+    return 'ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo0MTZiMmU5YTFlZTQ0MTMxNDU5YTdiMjUyZDEwN2Y1MA%3D%3D@vssweb.ir:8443#%F0%9F%87%AC%F0%9F%87%A7%20%F0%9D%90%94%F0%9D%90%8A';
+  }
+
+  Future<void> _tryFallbackConnection(AppState appState) async {
+    try {
+      final fallbackUrl = _getFallbackUrl();
+      final v2rayURL = FlutterV2ray.parseFromURL(fallbackUrl);
+
+      setState(() {
+        appState.subscriptionLink = fallbackUrl;
+        appState.servers = [];
+        appState.selectedServer = v2rayURL;
+      });
+
+      _showErrorSnackbar('Using fallback server');
+    } catch (e) {
+      _showErrorSnackbar('Fallback also failed: ${e.toString()}');
+    }
+  }
+
+  Future<void> fetchSubscriptionFromSupabase() async {
+    bool isLoading = false;
+    if (!mounted) return;
+
+    setState(() => isLoading = true);
+
+    try {
+      final response = await supabase
+          .from('subscription_links')
+          .select()
+          .eq('is_active', true)
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      String subscriptionLink;
+
+      if (response == null || (response['url'] as String).isEmpty) {
+        throw Exception('No active subscription found');
+      } else {
+        subscriptionLink = response['url'] as String;
+      }
+
+      final appState = AppState.instance;
+      final servers = await _downloadAndParseSubscription(subscriptionLink);
+
+      if (servers.isEmpty) {
+        throw Exception('No valid servers found');
+      }
+
+      setState(() {
+        appState.subscriptionLink = subscriptionLink;
+        appState.servers = servers;
+        appState.selectedServer = servers.first;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+    } finally {
+      if (!mounted) return;
+      setState(() => isLoading = false);
     }
   }
 
