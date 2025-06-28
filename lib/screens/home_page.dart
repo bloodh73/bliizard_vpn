@@ -779,11 +779,11 @@ class _HomePageState extends State<HomePage> {
                   Text(
                     isSubscriptionExpired
                         ? 'اشتراک شما به پایان رسیده'
-                        : 'حجم مصرفی شما به پایان رسیده',
+                        : 'اشتراک شما به پایان رسیده',
                     style: TextStyle(
                       color: Colors.red[100],
                       fontWeight: FontWeight.bold,
-                      fontSize: 15,
+                      fontSize: 13,
                     ),
                   ),
               ],
