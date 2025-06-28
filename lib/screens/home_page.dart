@@ -1,5 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:blizzard_vpn/components/custom_card.dart';
+import 'package:blizzard_vpn/components/custom_snackbar.dart';
+
 import '../utils/date_utils.dart' as date_utils;
 import 'package:blizzard_vpn/models/app_state.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +19,13 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  bool get isDataExhausted {
+    return userProfile?['data_limit'] != null &&
+        userProfile?['data_usage'] != null &&
+        userProfile!['data_usage'] >= userProfile!['data_limit'];
+  }
+
+  Timer? _periodicCheckTimer;
   bool isLoading = false;
   double _buttonScale = 1.0;
   bool _isAnimating = false;
@@ -25,8 +36,13 @@ class _HomePageState extends State<HomePage> {
       v2rayStatus.value = status;
     },
   );
-
   Widget _buildUserDrawer() {
+    final isSubscriptionExpired =
+        userProfile?['expiry_date'] != null &&
+        DateTime.tryParse(
+          userProfile!['expiry_date'],
+        )!.isBefore(DateTime.now());
+
     return Drawer(
       width: MediaQuery.of(context).size.width * 0.8,
       child: Container(
@@ -34,7 +50,9 @@ class _HomePageState extends State<HomePage> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.blue[900]!, Colors.blue[700]!],
+            colors: isSubscriptionExpired
+                ? [Colors.red[900]!, Colors.red[700]!]
+                : [Colors.blue[900]!, Colors.blue[700]!],
           ),
         ),
         child: Column(
@@ -48,12 +66,27 @@ class _HomePageState extends State<HomePage> {
                 supabase.auth.currentUser?.email ?? 'No email',
                 style: TextStyle(fontSize: 14),
               ),
-              currentAccountPicture: CircleAvatar(
-                backgroundColor: Colors.white,
-                child: Icon(Icons.person, color: Colors.blue, size: 40),
-              ),
+              currentAccountPicture: Image.asset('assets/images/logo.png'),
               decoration: BoxDecoration(color: Colors.transparent),
             ),
+            if (isSubscriptionExpired)
+              Container(
+                padding: EdgeInsets.all(8),
+                color: Colors.red[800],
+                child: Row(
+                  children: [
+                    Icon(Icons.warning, color: Colors.white),
+                    SizedBox(width: 8),
+                    Text(
+                      'Subscription Expired',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
@@ -115,6 +148,52 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _checkUserStatus() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      final response = await supabase
+          .from('users')
+          .select('expiry_date, data_limit, data_usage')
+          .eq('id', user.id)
+          .single();
+
+      final expiryDate = DateTime.tryParse(response['expiry_date'] ?? '');
+      final dataLimit = response['data_limit'] ?? 0;
+      final dataUsage = response['data_usage'] ?? 0;
+
+      // بررسی انقضای اشتراک
+      if (expiryDate != null && expiryDate.isBefore(DateTime.now())) {
+        if (mounted) {
+          _showSubscriptionExpiredSnackbar(); // نمایش پیام انقضا
+        }
+        await flutterV2ray.stopV2Ray(); // قطع اتصال VPN
+        return;
+      }
+
+      // بررسی حجم مصرفی
+      if (dataLimit > 0 && dataUsage >= dataLimit) {
+        if (mounted) {
+          _showErrorSnackbar('اشتراک شما به پایان رسیده است');
+        }
+        await flutterV2ray.stopV2Ray();
+      }
+    } catch (e) {
+      debugPrint('Error checking user status: $e');
+    }
+  }
+
+  void _showSubscriptionExpiredSnackbar() {
+    CustomSnackbar.show(
+      context: context,
+      message: 'اشتراک شما منقضی شده است. برای ادامه، لطفاً تمدید کنید..',
+      backgroundColor: Colors.orange,
+      icon: Icons.warning,
+      duration: const Duration(seconds: 5),
     );
   }
 
@@ -189,9 +268,49 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _initializeApp();
+    _checkUserStatus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       refreshServers();
     });
+    _startPeriodicChecks();
+  }
+
+  @override
+  void dispose() {
+    _periodicCheckTimer?.cancel(); // توقف تایمر هنگام از بین رفتن ویجت
+    super.dispose();
+  }
+
+  void _startPeriodicChecks() {
+    // تایمر قبلی را لغو کنید اگر وجود دارد
+    _periodicCheckTimer?.cancel();
+
+    // تنظیم تایمر جدید برای بررسی هر 30 ثانیه
+    _periodicCheckTimer = Timer.periodic(Duration(seconds: 30), (timer) async {
+      await _checkUserStatus();
+      await _updateUserProfileFromSupabase();
+    });
+  }
+
+  Future<void> _updateUserProfileFromSupabase() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      final response = await supabase
+          .from('users')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (response != null && mounted) {
+        setState(() {
+          userProfile = response;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error updating user profile: $e');
+    }
   }
 
   Future<void> _initializeApp() async {
@@ -213,6 +332,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> updateUserDataUsage(String userId, int bytesUsed) async {
+    await supabase
+        .from('users')
+        .update({
+          'data_usage': supabase.rpc(
+            'increment',
+            params: {'column': 'data_usage', 'amount': bytesUsed},
+          ),
+        })
+        .eq('id', userId);
+
     await supabase
         .from('users')
         .update({
@@ -400,7 +529,7 @@ class _HomePageState extends State<HomePage> {
 
   String _getFallbackUrl() {
     // Return a known-good fallback URL
-    return 'ss://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTo0MTZiMmU5YTFlZTQ0MTMxNDU5YTdiMjUyZDEwN2Y1MA%3D%3D@vssweb.ir:8443#%F0%9F%87%AC%F0%9F%87%A7%20%F0%9D%90%94%F0%9D%90%8A';
+    return 'Try Again';
   }
 
   Future<void> _tryFallbackConnection(AppState appState) async {
@@ -468,7 +597,33 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> connect() async {
     final appState = AppState.instance;
-    if (appState.selectedServer == null) return;
+    if (appState.selectedServer == null) {
+      _showErrorSnackbar('No server selected');
+      return;
+    }
+
+    // بررسی وضعیت اشتراک قبل از اتصال
+    await _checkUserStatus();
+
+    final isSubscriptionExpired =
+        userProfile?['expiry_date'] != null &&
+        DateTime.tryParse(
+          userProfile!['expiry_date'],
+        )!.isBefore(DateTime.now());
+
+    final isDataExhausted =
+        userProfile?['data_limit'] != null &&
+        userProfile?['data_usage'] != null &&
+        userProfile!['data_usage'] >= userProfile!['data_limit'];
+
+    if (isSubscriptionExpired || isDataExhausted) {
+      if (isSubscriptionExpired) {
+        _showSubscriptionExpiredSnackbar();
+      } else if (isDataExhausted) {
+        _showErrorSnackbar('حجم مصرفی شما به پایان رسیده است');
+      }
+      return;
+    }
 
     setState(() => isConnecting = true);
 
@@ -486,16 +641,54 @@ class _HomePageState extends State<HomePage> {
         );
 
         await _logConnection(user.id, appState.selectedServer!.remark);
-        setState(() {}); // Force UI update
       } else {
         _showErrorSnackbar('Permission denied');
       }
     } catch (e) {
       _showErrorSnackbar('Connection error: $e');
+      await flutterV2ray.stopV2Ray();
     } finally {
-      setState(() => isConnecting = false);
+      if (mounted) {
+        setState(() => isConnecting = false);
+      }
     }
   }
+  // Future<void> connect() async {
+  //   final appState = AppState.instance;
+  //   if (appState.selectedServer == null) return;
+
+  //   setState(() => isConnecting = true);
+
+  //   try {
+  //     final user = supabase.auth.currentUser;
+  //     if (user == null) throw Exception('User not authenticated');
+
+  //     await _checkUserStatus(); // بررسی وضعیت قبل از اتصال
+
+  //     if (await flutterV2ray.requestPermission()) {
+  //       await flutterV2ray.startV2Ray(
+  //         remark: appState.selectedServer!.remark,
+  //         config: appState.selectedServer!.getFullConfiguration(),
+  //         proxyOnly: false,
+  //         bypassSubnets: [],
+  //         notificationDisconnectButtonName: "DISCONNECT",
+  //       );
+
+  //       await _logConnection(user.id, appState.selectedServer!.remark);
+  //       setState(() {}); // Force UI update
+  //     } else {
+  //       _showErrorSnackbar('Permission denied');
+  //     }
+  //   } catch (e) {
+  //     if (e.toString().contains('BadParcelableException')) {
+  //       await flutterV2ray.stopV2Ray();
+  //       await Future.delayed(Duration(seconds: 1));
+  //       await connect(); // تلاش مجدد
+  //     } else {
+  //       _showErrorSnackbar('Connection error: $e');
+  //     }
+  //   }
+  // }
 
   Future<void> _logConnection(String userId, String server) async {
     await supabase.from('connection_logs').insert({
@@ -506,9 +699,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showErrorSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+    CustomSnackbar.info(context: context, message: message);
   }
 
   @override
@@ -520,11 +711,6 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('Blizzard VPN'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _handleLogout,
-            tooltip: 'Logout',
-          ),
           IconButton(
             icon: isRefreshing
                 ? const CircularProgressIndicator()
@@ -550,141 +736,155 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.only(bottom: 40),
               child: _buildConnectButton(),
             ),
-            const Spacer(),
-            if (coreVersion != null)
-              Text(
-                'V2Ray Core v$coreVersion',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
+            // const Spacer(),
+            // if (coreVersion != null)
+            //   Text(
+            //     'V2Ray Core v$coreVersion',
+            //     style: TextStyle(color: Colors.grey[600]),
+            //   ),
           ],
         ),
       ),
     );
   }
-  //           // App Version
-  //           if (coreVersion != null)
-  //             Text(
-  //               'V2Ray Core v$coreVersion',
-  //               style: TextStyle(color: Colors.grey[600]),
-  //             ),
-  //         ],
-  //       ),
-  //     ),
-  //   );
-  // }
 
   Widget _buildUserProfileCard(User? user) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Scaffold.of(context).openDrawer();
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Colors.blue[800]!, Colors.blue[600]!],
+    final isSubscriptionExpired = false; // همان شرط قبلی
+    final dataExhausted = isDataExhausted; // استفاده از متغیر جدید
+
+    return CustomCard(
+      isErrorState: isSubscriptionExpired || isDataExhausted,
+      child: Column(
+        children: [
+          ListTile(
+            leading: Image.asset('assets/images/logo.png'),
+            title: Text(
+              userProfile?['full_name'] ?? 'Guest User',
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                ListTile(
-                  leading: const Icon(Icons.account_circle, size: 40),
-                  title: Text(
-                    userProfile?['full_name'] ?? 'Guest User',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                if (userProfile?['expiry_date'] != null)
+                  Text(
+                    _formatDate(userProfile!['expiry_date']),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isSubscriptionExpired || isDataExhausted
+                          ? Colors.red[100]
+                          : Colors.white,
+                    ),
                   ),
-                  subtitle: Text(user?.email ?? 'No email'),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (userProfile?['expiry_date'] != null)
-                        Text(
-                          _formatDate(userProfile!['expiry_date']),
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      if (userProfile?['data_usage'] != null &&
-                          userProfile?['data_limit'] != null)
-                        Text(
-                          '${_formatBytes(userProfile!['data_usage'])} / ${_formatBytes(userProfile!['data_limit'])}',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                    ],
+                if (isSubscriptionExpired || isDataExhausted)
+                  Text(
+                    isSubscriptionExpired
+                        ? 'اشتراک شما به پایان رسیده'
+                        : 'حجم مصرفی شما به پایان رسیده',
+                    style: TextStyle(
+                      color: Colors.red[100],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
                   ),
-                ),
-                if (isProfileLoading) const LinearProgressIndicator(),
               ],
             ),
           ),
-        ),
+          if (isProfileLoading) const LinearProgressIndicator(),
+        ],
       ),
     );
   }
 
   Widget _buildServerCard(AppState appState) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return CustomCard(
       child: ListTile(
-        title: const Text('SERVER', style: TextStyle(fontSize: 12)),
+        title: const Text(
+          'Select Server',
+          style: TextStyle(fontSize: 18, color: Colors.white),
+        ),
         subtitle: Text(
           appState.selectedServer?.remark ?? 'No server selected',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () async {
           final result = await Navigator.pushNamed(context, '/servers');
           if (result == true) {
-            setState(() {}); // به‌روزرسانی وضعیت
+            setState(() {});
           }
         },
       ),
     );
   }
 
+  Future<void> _updateDataUsage(int bytesUsed) async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      // دریافت مقدار فعلی
+      final response = await supabase
+          .from('users')
+          .select('data_usage')
+          .eq('id', user.id)
+          .single();
+
+      final currentUsage = response['data_usage'] ?? 0;
+
+      // آپدیت مقدار جدید
+      await supabase
+          .from('users')
+          .update({
+            'data_usage': currentUsage + bytesUsed,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', user.id);
+
+      debugPrint('Updated data usage to ${currentUsage + bytesUsed}');
+    } catch (e, stackTrace) {
+      debugPrint('Error updating data usage: $e');
+      debugPrint('Stack trace: $stackTrace');
+    }
+  }
+
   Widget _buildConnectionStatus() {
     return ValueListenableBuilder<V2RayStatus>(
       valueListenable: v2rayStatus,
       builder: (context, status, _) {
-        return Column(
-          children: [
-            // Text(
-            //   _getStatusText(status.state),
-            //   style: const TextStyle(
-            //     color: Colors.white,
-            //     fontWeight: FontWeight.bold,
-            //     fontSize: 16,
-            //   ),
-            // ),
-            const SizedBox(height: 10),
-            if (status.state == 'CONNECTED') ...[
-              Text('Duration: ${status.duration}'),
+        if (status.state == 'CONNECTED') {
+          final bytesUsed = (status.uploadSpeed + status.downloadSpeed) * 30;
+          _updateDataUsage(bytesUsed);
+        }
+        return CustomCard(
+          child: Column(
+            children: [
               const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildSpeedIndicator(
-                    Icons.upload,
-                    '${_formatSpeed(status.uploadSpeed)}',
-                    Colors.blue,
-                  ),
-                  const SizedBox(width: 30),
-                  _buildSpeedIndicator(
-                    Icons.download,
-                    '${_formatSpeed(status.downloadSpeed)}',
-                    Colors.green,
-                  ),
-                ],
-              ),
+              if (status.state == 'CONNECTED') ...[
+                Text(' ${status.duration}', style: TextStyle(fontSize: 24)),
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildSpeedIndicator(
+                      Icons.upload,
+                      _formatSpeed(status.uploadSpeed),
+                      Colors.blue,
+                    ),
+                    _buildSpeedIndicator(
+                      Icons.download,
+                      _formatSpeed(status.downloadSpeed),
+                      Colors.green,
+                    ),
+                  ],
+                ),
+              ],
             ],
-          ],
+          ),
         );
       },
     );
@@ -705,7 +905,10 @@ class _HomePageState extends State<HomePage> {
       children: [
         Icon(icon, color: color, size: 28),
         const SizedBox(height: 4),
-        Text(speed, style: TextStyle(fontWeight: FontWeight.bold)),
+        Text(
+          speed,
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
       ],
     );
   }
@@ -718,104 +921,53 @@ class _HomePageState extends State<HomePage> {
         final buttonText = isConnected ? 'DISCONNECT' : 'CONNECT';
         final buttonColor = isConnected ? Colors.red : Colors.green;
 
+        // بررسی انقضای اشتراک
+        final expiryDate = userProfile?['expiry_date'] != null
+            ? DateTime.tryParse(userProfile!['expiry_date'])
+            : null;
+        final isSubscriptionExpired =
+            expiryDate != null && expiryDate.isBefore(DateTime.now());
+
         return Center(
           child: GestureDetector(
-            onTapDown: (_) {
-              if (!isConnecting && !_isAnimating) {
-                setState(() {
-                  _buttonScale = 0.95;
-                  _isAnimating = true;
-                });
-              }
-            },
-            onTapUp: (_) async {
-              if (!isConnecting && !_isAnimating) return;
-
-              setState(() => _buttonScale = 1.0);
-
-              await Future.delayed(const Duration(milliseconds: 100));
-
-              setState(() => _isAnimating = false);
-
-              if (isConnected) {
-                await flutterV2ray.stopV2Ray();
-              } else {
-                await connect();
-              }
-            },
-            onTapCancel: () {
-              if (!isConnecting && !_isAnimating) return;
-              setState(() {
-                _buttonScale = 1.0;
-                _isAnimating = false;
-              });
-            },
+            onTap: isSubscriptionExpired || isDataExhausted
+                ? null // غیرفعال کردن دکمه اگر اشتراک تمام شده یا حجم مصرفی تمام شده باشد
+                : () async {
+                    if (isConnected) {
+                      await flutterV2ray.stopV2Ray();
+                    } else {
+                      await connect();
+                    }
+                  },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              transform: Matrix4.identity()..scale(_buttonScale),
               width: 120,
               height: 120,
               decoration: BoxDecoration(
-                color: buttonColor,
+                color: isSubscriptionExpired ? Colors.grey : buttonColor,
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: buttonColor.withOpacity(0.5),
-                    blurRadius: 15,
-                    spreadRadius: isConnected ? 0 : 5,
-                  ),
-                ],
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    buttonColor.withOpacity(0.9),
-                    buttonColor.withOpacity(0.7),
-                  ],
-                ),
               ),
-              child: Stack(
-                alignment: Alignment.center,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (isConnecting)
-                    CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      strokeWidth: 3,
-                    )
-                  else
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          isConnected ? Icons.power_settings_new : Icons.power,
-                          size: 32,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          buttonText,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                  Icon(
+                    isConnected ? Icons.power_settings_new : Icons.power,
+                    size: 32,
+                    color: Colors.white,
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    isSubscriptionExpired
+                        ? 'EXPIRED'
+                        : isDataExhausted
+                        ? 'NO DATA'
+                        : buttonText,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
-                  if (isConnected && !isConnecting)
-                    Positioned.fill(
-                      child: AnimatedOpacity(
-                        opacity: _isAnimating ? 0.6 : 0.0,
-                        duration: const Duration(milliseconds: 500),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: buttonColor.withOpacity(0.4),
-                          ),
-                        ),
-                      ),
-                    ),
+                  ),
                 ],
               ),
             ),

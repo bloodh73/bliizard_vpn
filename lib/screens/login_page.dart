@@ -195,8 +195,9 @@ class _LoginPageState extends State<LoginPage> {
             key: _formKey,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              // crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                Image.asset('assets/images/logo.png'),
                 const SizedBox(height: 40),
                 TextFormField(
                   controller: _emailController,
@@ -268,25 +269,28 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ],
                 const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _handleAuth,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                SizedBox(
+                  width: MediaQuery.of(context).size.width * 0.9,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _handleAuth,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      backgroundColor: Colors.blueAccent,
                     ),
-                    backgroundColor: Colors.blueAccent,
-                  ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : Text(
-                          _isSignUp ? 'Sign Up' : 'Login',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Text(
+                            _isSignUp ? 'Sign Up' : 'Login',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextButton(
@@ -294,6 +298,8 @@ class _LoginPageState extends State<LoginPage> {
                     setState(() => _isSignUp = !_isSignUp);
                   },
                   child: Container(
+                    width: MediaQuery.of(context).size.width * 0.9,
+
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [Colors.blueAccent, Colors.cyanAccent],
@@ -305,6 +311,7 @@ class _LoginPageState extends State<LoginPage> {
                       horizontal: 24,
                     ),
                     child: Text(
+                      textAlign: TextAlign.center,
                       _isSignUp
                           ? 'Already have an account? Login'
                           : 'Create an account',
