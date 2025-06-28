@@ -27,8 +27,6 @@ class _HomePageState extends State<HomePage> {
 
   Timer? _periodicCheckTimer;
   bool isLoading = false;
-  double _buttonScale = 1.0;
-  bool _isAnimating = false;
   final supabase = Supabase.instance.client;
   var v2rayStatus = ValueNotifier<V2RayStatus>(V2RayStatus());
   late final flutterV2ray = FlutterV2ray(
@@ -37,6 +35,8 @@ class _HomePageState extends State<HomePage> {
     },
   );
   Widget _buildUserDrawer() {
+    final isAdmin = userProfile?['is_admin'] == true;
+
     final isSubscriptionExpired =
         userProfile?['expiry_date'] != null &&
         DateTime.tryParse(
@@ -115,6 +115,23 @@ class _HomePageState extends State<HomePage> {
                               .clamp(0.0, 1.0)
                         : 0.0,
                   ),
+                  if (isAdmin) ...[
+                    _buildDrawerDivider(),
+                    ListTile(
+                      leading: Icon(
+                        Icons.admin_panel_settings,
+                        color: Colors.white,
+                      ),
+                      title: Text(
+                        'Admin Panel',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context); // بستن دراور
+                        Navigator.pushNamed(context, '/admin');
+                      },
+                    ),
+                  ],
                   _buildDrawerDivider(),
                   _buildDrawerItem(
                     icon: Icons.account_circle,
@@ -750,7 +767,6 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildUserProfileCard(User? user) {
     final isSubscriptionExpired = false; // همان شرط قبلی
-    final dataExhausted = isDataExhausted; // استفاده از متغیر جدید
 
     return CustomCard(
       isErrorState: isSubscriptionExpired || isDataExhausted,
@@ -778,6 +794,7 @@ class _HomePageState extends State<HomePage> {
                 if (isSubscriptionExpired || isDataExhausted)
                   Text(
                     isSubscriptionExpired
+                        // ignore: dead_code
                         ? 'اشتراک شما به پایان رسیده'
                         : 'اشتراک شما به پایان رسیده',
                     style: TextStyle(
@@ -860,6 +877,7 @@ class _HomePageState extends State<HomePage> {
           _updateDataUsage(bytesUsed);
         }
         return CustomCard(
+          backgroundColor: Colors.white,
           child: Column(
             children: [
               const SizedBox(height: 10),
@@ -873,7 +891,7 @@ class _HomePageState extends State<HomePage> {
                     _buildSpeedIndicator(
                       Icons.upload,
                       _formatSpeed(status.uploadSpeed),
-                      Colors.blue,
+                      Colors.red,
                     ),
                     _buildSpeedIndicator(
                       Icons.download,

@@ -1,7 +1,7 @@
 // components/custom_card.dart
 import 'package:flutter/material.dart';
 
-class card extends StatelessWidget {
+class CustomCard extends StatelessWidget {
   final Widget child;
   final Color? backgroundColor;
   final bool isErrorState;
@@ -9,7 +9,7 @@ class card extends StatelessWidget {
   final double? elevation;
   final BorderRadius? borderRadius;
 
-  const card({
+  const CustomCard({
     super.key,
     required this.child,
     this.backgroundColor,
