@@ -17,6 +17,7 @@ class CustomCard extends StatelessWidget {
     this.padding,
     this.elevation,
     this.borderRadius,
+    required String title,
   });
 
   @override

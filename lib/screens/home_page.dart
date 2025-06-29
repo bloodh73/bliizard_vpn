@@ -26,6 +26,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Timer? _periodicCheckTimer;
+
   bool isLoading = false;
   final supabase = Supabase.instance.client;
   var v2rayStatus = ValueNotifier<V2RayStatus>(V2RayStatus());
@@ -34,138 +35,95 @@ class _HomePageState extends State<HomePage> {
       v2rayStatus.value = status;
     },
   );
-  Widget _buildUserDrawer() {
-    final isAdmin = userProfile?['is_admin'] == true;
+  Map<String, dynamic>? userProfile;
+  bool isProfileLoading = false;
+  bool isConnecting = false;
+  bool isRefreshing = false;
+  String? coreVersion;
 
-    final isSubscriptionExpired =
-        userProfile?['expiry_date'] != null &&
-        DateTime.tryParse(
-          userProfile!['expiry_date'],
-        )!.isBefore(DateTime.now());
+  @override
+  void initState() {
+    super.initState();
+    _initializeApp();
+    _checkUserStatus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      refreshServers();
+    });
+    _startPeriodicChecks();
+  }
 
-    return Drawer(
-      width: MediaQuery.of(context).size.width * 0.8,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isSubscriptionExpired
-                ? [Colors.red[900]!, Colors.red[700]!]
-                : [Colors.blue[900]!, Colors.blue[700]!],
-          ),
-        ),
-        child: Column(
-          children: [
-            UserAccountsDrawerHeader(
-              accountName: Text(
-                userProfile?['full_name'] ?? 'Guest',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              accountEmail: Text(
-                supabase.auth.currentUser?.email ?? 'No email',
-                style: TextStyle(fontSize: 14),
-              ),
-              currentAccountPicture: Image.asset('assets/images/logo.png'),
-              decoration: BoxDecoration(color: Colors.transparent),
-            ),
-            if (isSubscriptionExpired)
-              Container(
-                padding: EdgeInsets.all(8),
-                color: Colors.red[800],
-                child: Row(
-                  children: [
-                    Icon(Icons.warning, color: Colors.white),
-                    SizedBox(width: 8),
-                    Text(
-                      'Subscription Expired',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  _buildDrawerItem(
-                    icon: Icons.calendar_today,
-                    title: 'Expry Date',
-                    value: userProfile?['expiry_date'] != null
-                        ? date_utils.formatToJalali(userProfile!['expiry_date'])
-                        : 'No Set',
-                  ),
-                  _buildDrawerDivider(),
-                  _buildDrawerItem(
-                    icon: Icons.data_usage,
-                    title: 'Data Usage',
-                    value: userProfile?['data_usage'] != null
-                        ? '${_formatBytes(userProfile!['data_usage'])} / ${_formatBytes(userProfile!['data_limit'])}'
-                        : '0 / 0',
-                    isProgress: true,
-                    progressValue:
-                        userProfile?['data_usage'] != null &&
-                            userProfile?['data_limit'] != null &&
-                            userProfile!['data_limit'] > 0
-                        ? (userProfile!['data_usage'] /
-                                  userProfile!['data_limit'])
-                              .clamp(0.0, 1.0)
-                        : 0.0,
-                  ),
-                  if (isAdmin) ...[
-                    _buildDrawerDivider(),
-                    ListTile(
-                      leading: Icon(
-                        Icons.admin_panel_settings,
-                        color: Colors.white,
-                      ),
-                      title: Text(
-                        'Admin Panel',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      onTap: () {
-                        Navigator.pop(context); // بستن دراور
-                        Navigator.pushNamed(context, '/admin');
-                      },
-                    ),
-                  ],
-                  _buildDrawerDivider(),
-                  _buildDrawerItem(
-                    icon: Icons.account_circle,
-                    title: 'Account Type',
-                    value:
-                        userProfile?['subscription_type']
-                            ?.toString()
-                            .toUpperCase() ??
-                        'FREE',
-                  ),
-                  _buildDrawerDivider(),
-                  _buildDrawerItem(
-                    icon: Icons.settings,
-                    title: 'Settings',
-                    onTap: () {
-                      // Navigate to settings page
-                    },
-                  ),
-                  _buildDrawerDivider(),
-                  ListTile(
-                    leading: Icon(Icons.logout, color: Colors.white),
-                    title: Text(
-                      'Logout',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    onTap: _handleLogout,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  @override
+  void dispose() {
+    _periodicCheckTimer?.cancel(); // Stop the timer when the widget is disposed
+    v2rayStatus.dispose(); // Dispose the ValueNotifier
+    super.dispose();
+  }
+
+  Future<void> _initializeApp() async {
+    await _initializeV2Ray();
+    await _loadUserProfile();
+    await AppState.instance.fetchAndParseServers(); // فراخوانی از AppState
+  }
+
+  Future<void> _initializeV2Ray() async {
+    try {
+      await flutterV2ray.initializeV2Ray(
+        notificationIconResourceType: "mipmap",
+        notificationIconResourceName: "ic_launcher",
+      );
+      coreVersion = await flutterV2ray.getCoreVersion();
+      setState(() {});
+    } catch (e) {
+      _showErrorSnackbar('Failed to initialize V2Ray: $e');
+    }
+  }
+
+  Future<void> _loadUserProfile() async {
+    setState(() => isProfileLoading = true);
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      final response = await supabase
+          .from('users')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (response == null) {
+        // Create default profile if doesn't exist
+        await supabase.from('users').insert({
+          'id': user.id,
+          'email': user.email,
+          'full_name': user.email?.split('@').first ?? 'User',
+          'subscription_type': 'free',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+        // Reload after creation
+        final newResponse = await supabase
+            .from('users')
+            .select()
+            .eq('id', user.id)
+            .single();
+        setState(() => userProfile = newResponse);
+      } else {
+        setState(() => userProfile = response);
+      }
+    } catch (e) {
+      _showErrorSnackbar('Failed to load profile: $e');
+    } finally {
+      setState(() => isProfileLoading = false);
+    }
+  }
+
+  void _startPeriodicChecks() {
+    _periodicCheckTimer?.cancel();
+    _periodicCheckTimer = Timer.periodic(const Duration(seconds: 15), (
+      timer,
+    ) async {
+      await _checkUserStatus();
+      await _updateUserProfileFromSupabase();
+    });
   }
 
   Future<void> _checkUserStatus() async {
@@ -183,19 +141,19 @@ class _HomePageState extends State<HomePage> {
       final dataLimit = response['data_limit'] ?? 0;
       final dataUsage = response['data_usage'] ?? 0;
 
-      // بررسی انقضای اشتراک
+      // Check subscription expiry
       if (expiryDate != null && expiryDate.isBefore(DateTime.now())) {
         if (mounted) {
-          _showSubscriptionExpiredSnackbar(); // نمایش پیام انقضا
+          _showSubscriptionExpiredSnackbar();
         }
-        await flutterV2ray.stopV2Ray(); // قطع اتصال VPN
+        await flutterV2ray.stopV2Ray();
         return;
       }
 
-      // بررسی حجم مصرفی
+      // Check data usage
       if (dataLimit > 0 && dataUsage >= dataLimit) {
         if (mounted) {
-          _showErrorSnackbar('اشتراک شما به پایان رسیده است');
+          _showErrorSnackbar('Subscription data exhausted!');
         }
         await flutterV2ray.stopV2Ray();
       }
@@ -204,13 +162,337 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _updateUserProfileFromSupabase() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) return;
+
+      final response = await supabase
+          .from('users')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (response != null && mounted) {
+        setState(() {
+          userProfile = response;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error updating user profile: $e');
+    }
+  }
+
   void _showSubscriptionExpiredSnackbar() {
     CustomSnackbar.show(
       context: context,
-      message: 'اشتراک شما منقضی شده است. برای ادامه، لطفاً تمدید کنید..',
+      message: 'Your subscription has expired. Please renew to continue.',
       backgroundColor: Colors.orange,
       icon: Icons.warning,
       duration: const Duration(seconds: 5),
+    );
+  }
+
+  Future<void> refreshServers() async {
+    final appState = AppState.instance;
+    setState(() => isRefreshing = true);
+    try {
+      final response = await supabase
+          .from('subscription_links')
+          .select()
+          .eq('is_active', true)
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      String subscriptionLink;
+      if (response == null || (response['url'] as String).isEmpty) {
+        subscriptionLink = _getFallbackUrl();
+      } else {
+        subscriptionLink = response['url'] as String;
+      }
+
+      if (!_isValidV2RayUrl(subscriptionLink)) {
+        throw Exception('Invalid URL format: $subscriptionLink');
+      }
+
+      final servers = await _downloadAndParseSubscription(subscriptionLink);
+      setState(() {
+        appState.subscriptionLink = subscriptionLink;
+        appState.servers = servers;
+        appState.selectedServer = servers.isNotEmpty ? servers.first : null;
+      });
+    } catch (e) {
+      _showErrorSnackbar('Error loading subscription: ${e.toString()}');
+      await _tryFallbackConnection(appState);
+    } finally {
+      setState(() => isRefreshing = false);
+    }
+  }
+
+  String _getFallbackUrl() {
+    return "vmess://eyJhZGQiOiIxMjcuMC4wLjEiLCJhaWQiOiIwIiwiYWxwbiI6IiIsImhvc3QiOiIiLCJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIsIm5ldCI6InRjcCIsInBhdGgiOiIiLCJwb3J0IjoiNDQzIiwicHMyIjoiZnJlZSBzZXJ2ZXIiLCJzY3kiOiJhdXRvIiwicmVtYXJrIjoiZnJlZSBzZXJ2ZXIiLCJzbmkiOiIiLCJ0bHMiOiIiLCJ0eXBlIjoiaHR0cCIsInYiOiIyIiwidiNpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIsInBvcnRzIjoieXl5In0=";
+  }
+
+  bool _isValidV2RayUrl(String url) {
+    return url.startsWith('vmess://') ||
+        url.startsWith('vless://') ||
+        url.startsWith('ss://') ||
+        url.startsWith('trojan://') ||
+        url.startsWith('http://') ||
+        url.startsWith('https://');
+  }
+
+  Future<List<V2RayURL>> _downloadAndParseSubscription(String url) async {
+    try {
+      if (url.startsWith('http')) {
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode != 200) {
+          throw Exception('Failed to download subscription');
+        }
+        final content = String.fromCharCodes(base64Decode(response.body));
+        final servers = content.split('\n');
+        final validServers = <V2RayURL>[];
+        for (var server in servers) {
+          if (server.trim().isNotEmpty) {
+            try {
+              validServers.add(FlutterV2ray.parseFromURL(server));
+            } catch (e) {
+              debugPrint('Failed to parse server: $server, Error: $e');
+            }
+          }
+        }
+        return validServers;
+      } else {
+        return [FlutterV2ray.parseFromURL(url)];
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> _tryFallbackConnection(AppState appState) async {
+    try {
+      final fallbackUrl = _getFallbackUrl();
+      if (_isValidV2RayUrl(fallbackUrl)) {
+        final fallbackServers = [FlutterV2ray.parseFromURL(fallbackUrl)];
+        setState(() {
+          appState.subscriptionLink = fallbackUrl;
+          appState.servers = fallbackServers;
+          appState.selectedServer = fallbackServers.first;
+        });
+        _showErrorSnackbar(
+          'Failed to load subscription, using fallback server.',
+        );
+      }
+    } catch (e) {
+      _showErrorSnackbar('Failed to load fallback server: $e');
+    }
+  }
+
+  void _showErrorSnackbar(String message) {
+    CustomSnackbar.show(
+      context: context,
+      message: message,
+      backgroundColor: Colors.redAccent,
+      icon: Icons.error,
+    );
+  }
+
+  Future<void> _handleConnectDisconnect() async {
+    final appState = AppState.instance;
+    if (appState.selectedServer == null) {
+      _showErrorSnackbar('Please select a server first.');
+      return;
+    }
+
+    setState(() => isConnecting = true);
+    try {
+      // اصلاح: بررسی وضعیت V2Ray بر اساس رشته "CONNECTED"
+      if (v2rayStatus.value.state == "CONNECTED") {
+        await flutterV2ray.stopV2Ray();
+      } else {
+        // همچنین، مطمئن شوید که قبلاً متصل نبوده است تا از اتصال مجدد جلوگیری شود
+        if (v2rayStatus.value.state != "CONNECTING") {
+          // اضافه کردن این شرط برای جلوگیری از تلاش برای اتصال مجدد
+          await flutterV2ray.startV2Ray(
+            config: appState.selectedServer!.getFullConfiguration(),
+            remark: '',
+          );
+        }
+      }
+    } catch (e) {
+      _showErrorSnackbar('Connection error: $e');
+    } finally {
+      setState(() => isConnecting = false);
+    }
+  }
+
+  Future<void> _handleLogout() async {
+    try {
+      await flutterV2ray.stopV2Ray();
+      await supabase.auth.signOut();
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
+    } catch (e) {
+      _showErrorSnackbar('Logout failed: $e');
+    }
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return '0 B';
+    const suffixes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var i = (log(bytes) / log(1024)).floor();
+    return '${(bytes / pow(1024, i)).toStringAsFixed(1)} ${suffixes[i]}';
+  }
+
+  Widget _buildUserDrawer() {
+    final isAdmin = userProfile?['is_admin'] == true;
+    final isSubscriptionExpired =
+        userProfile?['expiry_date'] != null &&
+        DateTime.tryParse(
+          userProfile!['expiry_date'],
+        )!.isBefore(DateTime.now());
+
+    return Drawer(
+      width: MediaQuery.of(context).size.width * 0.8,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isSubscriptionExpired
+                ? [Colors.red[900]!, Colors.red[700]!]
+                : [
+                    Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                    Theme.of(context).colorScheme.primary,
+                  ], // Themed gradient
+          ),
+        ),
+        child: Column(
+          children: [
+            UserAccountsDrawerHeader(
+              accountName: Text(
+                userProfile?['full_name'] ?? 'Guest',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              accountEmail: Text(
+                supabase.auth.currentUser?.email ?? 'No email',
+                style: const TextStyle(fontSize: 14),
+              ),
+              currentAccountPicture: CircleAvatar(
+                backgroundColor: Theme.of(context).colorScheme.secondary,
+                child: Text(
+                  userProfile?['full_name']?[0].toUpperCase() ?? 'U',
+                  style: const TextStyle(fontSize: 32, color: Colors.black),
+                ),
+              ),
+              decoration: const BoxDecoration(color: Colors.transparent),
+            ),
+            if (isSubscriptionExpired)
+              Container(
+                padding: const EdgeInsets.all(12),
+                color: Colors.red[800],
+                child: const Row(
+                  children: [
+                    Icon(Icons.warning, color: Colors.white),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Subscription Expired! Please renew.',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  _buildDrawerItem(
+                    icon: Icons.calendar_today,
+                    title: 'Expiry Date',
+                    value: userProfile?['expiry_date'] != null
+                        ? date_utils.formatToJalali(userProfile!['expiry_date'])
+                        : 'Not Set',
+                  ),
+                  _buildDrawerDivider(),
+                  _buildDrawerItem(
+                    icon: Icons.data_usage,
+                    title: 'Data Usage',
+                    value: userProfile?['data_usage'] != null
+                        ? '${_formatBytes(userProfile!['data_usage'])} / ${_formatBytes(userProfile!['data_limit'] ?? 0)}'
+                        : '0 / 0 B',
+                    isProgress: true,
+                    progressValue:
+                        userProfile?['data_usage'] != null &&
+                            userProfile?['data_limit'] != null &&
+                            userProfile!['data_limit'] > 0
+                        ? (userProfile!['data_usage'] /
+                                  userProfile!['data_limit'])
+                              .clamp(0.0, 1.0)
+                        : 0.0,
+                  ),
+                  if (isAdmin) ...[
+                    _buildDrawerDivider(),
+                    ListTile(
+                      leading: Icon(
+                        Icons.admin_panel_settings,
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
+                      title: const Text(
+                        'Admin Panel',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context); // Close drawer
+                        Navigator.pushNamed(context, '/admin');
+                      },
+                    ),
+                  ],
+                  _buildDrawerDivider(),
+                  _buildDrawerItem(
+                    icon: Icons.account_circle,
+                    title: 'Account Type',
+                    value:
+                        userProfile?['subscription_type']
+                            ?.toString()
+                            .toUpperCase() ??
+                        'FREE',
+                  ),
+                  _buildDrawerDivider(),
+                  ListTile(
+                    leading: const Icon(Icons.settings, color: Colors.white),
+                    title: const Text(
+                      'Settings',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    onTap: () {
+                      // Navigate to settings page
+                    },
+                  ),
+                  _buildDrawerDivider(),
+                  ListTile(
+                    leading: const Icon(Icons.logout, color: Colors.white),
+                    title: const Text(
+                      'Logout',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    onTap: _handleLogout,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -223,15 +505,15 @@ class _HomePageState extends State<HomePage> {
     VoidCallback? onTap,
   }) {
     return ListTile(
-      leading: Icon(icon, color: Colors.white),
+      leading: Icon(icon, color: Colors.white70),
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(color: Colors.white70)),
+          Text(title, style: const TextStyle(color: Colors.white70)),
           if (value != null)
             Text(
               value,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
@@ -256,7 +538,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildDrawerDivider() {
     return Divider(
-      color: Colors.blue[800],
+      color: Colors.blue[800]?.withOpacity(0.5),
       height: 1,
       thickness: 1,
       indent: 16,
@@ -264,746 +546,288 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  String _formatDate(String dateString) {
-    return date_utils.formatToJalali(dateString);
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes <= 0) return '0 B';
-    const suffixes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var i = (log(bytes) / log(1024)).floor();
-    return '${(bytes / pow(1024, i)).toStringAsFixed(1)} ${suffixes[i]}';
-  }
-
-  String? coreVersion;
-  bool isConnecting = false;
-  bool isRefreshing = false;
-  Map<String, dynamic>? userProfile;
-  bool isProfileLoading = false;
-
   @override
-  void initState() {
-    super.initState();
-    _initializeApp();
-    _checkUserStatus();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      refreshServers();
-    });
-    _startPeriodicChecks();
-  }
-
-  @override
-  void dispose() {
-    _periodicCheckTimer?.cancel(); // توقف تایمر هنگام از بین رفتن ویجت
-    super.dispose();
-  }
-
-  void _startPeriodicChecks() {
-    // تایمر قبلی را لغو کنید اگر وجود دارد
-    _periodicCheckTimer?.cancel();
-
-    // تنظیم تایمر جدید برای بررسی هر 30 ثانیه
-    _periodicCheckTimer = Timer.periodic(Duration(seconds: 30), (timer) async {
-      await _checkUserStatus();
-      await _updateUserProfileFromSupabase();
-    });
-  }
-
-  Future<void> _updateUserProfileFromSupabase() async {
-    try {
-      final user = supabase.auth.currentUser;
-      if (user == null) return;
-
-      final response = await supabase
-          .from('users')
-          .select()
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (response != null && mounted) {
-        setState(() {
-          userProfile = response;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error updating user profile: $e');
-    }
-  }
-
-  Future<void> _initializeApp() async {
-    await _initializeV2Ray();
-    await _loadUserProfile();
-  }
-
-  Future<void> _initializeV2Ray() async {
-    try {
-      await flutterV2ray.initializeV2Ray(
-        notificationIconResourceType: "mipmap",
-        notificationIconResourceName: "ic_launcher",
-      );
-      coreVersion = await flutterV2ray.getCoreVersion();
-      setState(() {});
-    } catch (e) {
-      _showErrorSnackbar('Failed to initialize V2Ray: $e');
-    }
-  }
-
-  Future<void> updateUserDataUsage(String userId, int bytesUsed) async {
-    await supabase
-        .from('users')
-        .update({
-          'data_usage': supabase.rpc(
-            'increment',
-            params: {'column': 'data_usage', 'amount': bytesUsed},
-          ),
-        })
-        .eq('id', userId);
-
-    await supabase
-        .from('users')
-        .update({
-          'data_usage': supabase.rpc('increment', params: {'value': bytesUsed}),
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', userId);
-  }
-
-  Future<void> renewUserSubscription(String userId, int daysToAdd) async {
-    await supabase
-        .from('users')
-        .update({
-          'expiry_date': supabase.rpc(
-            'add_days',
-            params: {'date': 'expiry_date', 'num_days': daysToAdd},
-          ),
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', userId);
-  }
-
-  Future<void> increaseDataLimit(String userId, int additionalBytes) async {
-    await supabase
-        .from('users')
-        .update({
-          'data_limit': supabase.rpc(
-            'increment',
-            params: {'value': additionalBytes},
-          ),
-          'updated_at': DateTime.now().toIso8601String(),
-        })
-        .eq('id', userId);
-  }
-
-  Future<Map<String, dynamic>> getCurrentUserProfile() async {
-    final user = supabase.auth.currentUser;
-    if (user == null) throw Exception('User not authenticated');
-
-    final response = await supabase
-        .from('users')
-        .select()
-        .eq('id', user.id)
-        .single();
-
-    return response;
-  }
-
-  Future<void> _loadUserProfile() async {
-    setState(() => isProfileLoading = true);
-    try {
-      final user = supabase.auth.currentUser;
-      if (user == null) return;
-
-      final response = await supabase
-          .from('users')
-          .select()
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (response == null) {
-        // Create default profile if doesn't exist
-        await supabase.from('users').insert({
-          'id': user.id,
-          'email': user.email,
-          'full_name': user.email?.split('@').first ?? 'User',
-          'subscription_type': 'free',
-          'created_at': DateTime.now().toIso8601String(),
-        });
-
-        // Reload after creation
-        final newResponse = await supabase
-            .from('users')
-            .select()
-            .eq('id', user.id)
-            .single();
-
-        setState(() => userProfile = newResponse);
-      } else {
-        setState(() => userProfile = response);
-      }
-    } catch (e) {
-      _showErrorSnackbar('Failed to load profile: $e');
-    } finally {
-      setState(() => isProfileLoading = false);
-    }
-  }
-
-  Future<void> refreshServers() async {
+  Widget build(BuildContext context) {
     final appState = AppState.instance;
-    setState(() => isRefreshing = true);
-
-    try {
-      final response = await supabase
-          .from('subscription_links')
-          .select()
-          .eq('is_active', true)
-          .order('updated_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
-      String subscriptionLink;
-
-      if (response == null || (response['url'] as String).isEmpty) {
-        subscriptionLink = _getFallbackUrl();
-      } else {
-        subscriptionLink = response['url'] as String;
-      }
-
-      if (!_isValidV2RayUrl(subscriptionLink)) {
-        throw Exception('Invalid URL format: $subscriptionLink');
-      }
-
-      final servers = await _downloadAndParseSubscription(subscriptionLink);
-
-      setState(() {
-        appState.subscriptionLink = subscriptionLink;
-        appState.servers = servers;
-        appState.selectedServer = servers.isNotEmpty ? servers.first : null;
-      });
-    } catch (e) {
-      _showErrorSnackbar('Error loading subscription: ${e.toString()}');
-      await _tryFallbackConnection(appState);
-    } finally {
-      setState(() => isRefreshing = false);
-    }
-  }
-
-  bool _isValidV2RayUrl(String url) {
-    // قبول کردن هم URLهای مستقیم و هم لینک‌های سابسکریپشن
-    return url.startsWith('vmess://') ||
-        url.startsWith('vless://') ||
-        url.startsWith('ss://') ||
-        url.startsWith('trojan://') ||
-        url.startsWith('http://') ||
-        url.startsWith('https://');
-  }
-
-  Future<List<V2RayURL>> _downloadAndParseSubscription(String url) async {
-    try {
-      if (url.startsWith('http')) {
-        // دانلود محتوای سابسکریپشن
-        final response = await http.get(Uri.parse(url));
-        if (response.statusCode != 200) {
-          throw Exception('Failed to download subscription');
-        }
-
-        // پردازش محتوا (فرض بر این است که محتوا base64 encoded است)
-        final content = String.fromCharCodes(base64Decode(response.body));
-        final servers = content.split('\n');
-
-        // پردازش تمام سرورهای معتبر
-        final validServers = <V2RayURL>[];
-        for (final server in servers) {
-          if (server.trim().isEmpty) continue;
-
-          try {
-            if (server.startsWith('vmess://') ||
-                server.startsWith('vless://') ||
-                server.startsWith('ss://') ||
-                server.startsWith('trojan://')) {
-              final v2rayURL = FlutterV2ray.parseFromURL(server);
-              if (v2rayURL.remark.isNotEmpty) {
-                validServers.add(v2rayURL);
-              }
-            }
-          } catch (e) {
-            debugPrint('Error parsing server config: $e');
-          }
-        }
-
-        if (validServers.isEmpty) {
-          throw Exception('No valid servers found in subscription');
-        }
-
-        return validServers;
-      } else {
-        // اگر URL مستقیم بود
-        return [FlutterV2ray.parseFromURL(url)];
-      }
-    } catch (e) {
-      throw Exception('Failed to process subscription: ${e.toString()}');
-    }
-  }
-
-  String _getFallbackUrl() {
-    // Return a known-good fallback URL
-    return 'Try Again';
-  }
-
-  Future<void> _tryFallbackConnection(AppState appState) async {
-    try {
-      final fallbackUrl = _getFallbackUrl();
-      final v2rayURL = FlutterV2ray.parseFromURL(fallbackUrl);
-
-      setState(() {
-        appState.subscriptionLink = fallbackUrl;
-        appState.servers = [];
-        appState.selectedServer = v2rayURL;
-      });
-
-      _showErrorSnackbar('Using fallback server');
-    } catch (e) {
-      _showErrorSnackbar('Fallback also failed: ${e.toString()}');
-    }
-  }
-
-  Future<void> fetchSubscriptionFromSupabase() async {
-    if (!mounted) return;
-
-    setState(() => isLoading = true);
-
-    try {
-      final response = await supabase
-          .from('subscription_links')
-          .select()
-          .eq('is_active', true)
-          .order('updated_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
-      if (!mounted) return;
-
-      String subscriptionLink;
-
-      if (response == null || (response['url'] as String).isEmpty) {
-        throw Exception('No active subscription found');
-      } else {
-        subscriptionLink = response['url'] as String;
-      }
-
-      final appState = AppState.instance;
-      final servers = await _downloadAndParseSubscription(subscriptionLink);
-
-      if (servers.isEmpty) {
-        throw Exception('No valid servers found');
-      }
-
-      setState(() {
-        appState.subscriptionLink = subscriptionLink;
-        appState.servers = servers;
-        appState.selectedServer = servers.first;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
-    } finally {
-      if (!mounted) return;
-      setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> connect() async {
-    final appState = AppState.instance;
-    if (appState.selectedServer == null) {
-      _showErrorSnackbar('No server selected');
-      return;
-    }
-
-    // بررسی وضعیت اشتراک قبل از اتصال
-    await _checkUserStatus();
-
     final isSubscriptionExpired =
         userProfile?['expiry_date'] != null &&
         DateTime.tryParse(
           userProfile!['expiry_date'],
         )!.isBefore(DateTime.now());
-
     final isDataExhausted =
         userProfile?['data_limit'] != null &&
         userProfile?['data_usage'] != null &&
         userProfile!['data_usage'] >= userProfile!['data_limit'];
 
-    if (isSubscriptionExpired || isDataExhausted) {
-      if (isSubscriptionExpired) {
-        _showSubscriptionExpiredSnackbar();
-      } else if (isDataExhausted) {
-        _showErrorSnackbar('حجم مصرفی شما به پایان رسیده است');
-      }
-      return;
-    }
-
-    setState(() => isConnecting = true);
-
-    try {
-      final user = supabase.auth.currentUser;
-      if (user == null) throw Exception('User not authenticated');
-
-      if (await flutterV2ray.requestPermission()) {
-        await flutterV2ray.startV2Ray(
-          remark: appState.selectedServer!.remark,
-          config: appState.selectedServer!.getFullConfiguration(),
-          proxyOnly: false,
-          bypassSubnets: [],
-          notificationDisconnectButtonName: "DISCONNECT",
-        );
-
-        await _logConnection(user.id, appState.selectedServer!.remark);
-      } else {
-        _showErrorSnackbar('Permission denied');
-      }
-    } catch (e) {
-      _showErrorSnackbar('Connection error: $e');
-      await flutterV2ray.stopV2Ray();
-    } finally {
-      if (mounted) {
-        setState(() => isConnecting = false);
-      }
-    }
-  }
-  // Future<void> connect() async {
-  //   final appState = AppState.instance;
-  //   if (appState.selectedServer == null) return;
-
-  //   setState(() => isConnecting = true);
-
-  //   try {
-  //     final user = supabase.auth.currentUser;
-  //     if (user == null) throw Exception('User not authenticated');
-
-  //     await _checkUserStatus(); // بررسی وضعیت قبل از اتصال
-
-  //     if (await flutterV2ray.requestPermission()) {
-  //       await flutterV2ray.startV2Ray(
-  //         remark: appState.selectedServer!.remark,
-  //         config: appState.selectedServer!.getFullConfiguration(),
-  //         proxyOnly: false,
-  //         bypassSubnets: [],
-  //         notificationDisconnectButtonName: "DISCONNECT",
-  //       );
-
-  //       await _logConnection(user.id, appState.selectedServer!.remark);
-  //       setState(() {}); // Force UI update
-  //     } else {
-  //       _showErrorSnackbar('Permission denied');
-  //     }
-  //   } catch (e) {
-  //     if (e.toString().contains('BadParcelableException')) {
-  //       await flutterV2ray.stopV2Ray();
-  //       await Future.delayed(Duration(seconds: 1));
-  //       await connect(); // تلاش مجدد
-  //     } else {
-  //       _showErrorSnackbar('Connection error: $e');
-  //     }
-  //   }
-  // }
-
-  Future<void> _logConnection(String userId, String server) async {
-    await supabase.from('connection_logs').insert({
-      'user_id': userId,
-      'server': server,
-      'connected_at': DateTime.now().toIso8601String(),
-    });
-  }
-
-  void _showErrorSnackbar(String message) {
-    CustomSnackbar.info(context: context, message: message);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final appState = AppState.instance;
-    final user = supabase.auth.currentUser;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Blizzard VPN'),
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
         actions: [
           IconButton(
-            icon: isRefreshing
-                ? const CircularProgressIndicator()
-                : const Icon(Icons.refresh),
+            icon: Icon(
+              Icons.refresh,
+              color: isRefreshing ? Colors.grey : Colors.white,
+            ),
             onPressed: isRefreshing ? null : refreshServers,
             tooltip: 'Refresh Servers',
+          ),
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: () {
+              showAboutDialog(
+                context: context,
+                applicationName: 'Blizzard VPN',
+                applicationVersion: '1.0.0',
+                applicationLegalese: '© 2023 Blizzard VPN',
+                children: [
+                  Text('Core Version: ${coreVersion ?? 'N/A'}'),
+                  Text(
+                    'Selected Server: ${appState.selectedServer?.remark ?? 'None'}',
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
       drawer: _buildUserDrawer(),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _buildUserProfileCard(user),
-            const SizedBox(height: 20),
-            _buildServerCard(appState),
+            CustomCard(
+              title: 'Connection Status',
+              child: ValueListenableBuilder<V2RayStatus>(
+                valueListenable: v2rayStatus,
+                builder: (context, status, child) {
+                  // اصلاح: بررسی کنید که status.state برابر با "CONNECTED" باشد
+                  final isConnected = status.state == "CONNECTED";
 
-            const SizedBox(height: 20),
-            _buildConnectionStatus(),
-            const Spacer(),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 40),
-              child: _buildConnectButton(),
+                  // حالا منطق رنگ و متن دکمه به درستی کار خواهد کرد
+                  Color buttonColor = isConnected
+                      ? Colors
+                            .grey // وقتی متصل است
+                      : Colors
+                            .redAccent; // وقتی قطع است (یا هر رنگ دیگری برای حالت قطع)
+
+                  String buttonText = isConnected ? 'CONNECTED' : 'CONNECT';
+
+                  if (isConnecting) {
+                    buttonText = 'Connecting...';
+                  } else if (isSubscriptionExpired) {
+                    buttonColor = Colors.grey;
+                  } else if (isDataExhausted) {
+                    buttonColor = Colors.grey;
+                  }
+
+                  return Column(
+                    children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: 150,
+                        height: 150,
+                        decoration: BoxDecoration(
+                          color: isSubscriptionExpired || isDataExhausted
+                              ? Colors.grey[700]
+                              : buttonColor,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: buttonColor.withOpacity(0.4),
+                              blurRadius: 15,
+                              spreadRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: InkWell(
+                          onTap:
+                              (isSubscriptionExpired ||
+                                  isDataExhausted ||
+                                  isConnecting)
+                              ? null
+                              : _handleConnectDisconnect,
+                          borderRadius: BorderRadius.circular(75),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                isConnected
+                                    ? Icons
+                                          .power_settings_new // آیکون برای حالت متصل
+                                    : Icons.power, // آیکون برای حالت قطع
+                                size: 48,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                isSubscriptionExpired
+                                    ? 'EXPIRED'
+                                    : isDataExhausted
+                                    ? 'NO DATA'
+                                    : buttonText,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      // نمایش وضعیت متنی
+                      Text(
+                        'Status: ${status.state}', // نیازی به .toUpperCase() نیست چون خودش هست
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: isConnected
+                              ? Colors.greenAccent
+                              : Colors.redAccent,
+                        ),
+                      ),
+                      Text(
+                        'Upload: ${status.uploadSpeed}',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      Text(
+                        'Download: ${status.downloadSpeed}',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      Text(
+                        'Delay: ${status.downloadSpeed}',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-            // const Spacer(),
-            // if (coreVersion != null)
-            //   Text(
-            //     'V2Ray Core v$coreVersion',
-            //     style: TextStyle(color: Colors.grey[600]),
-            //   ),
+            const SizedBox(height: 16),
+            CustomCard(
+              title: 'Server Information',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListTile(
+                    leading: const Icon(
+                      Icons.cloud_queue,
+                      color: Colors.blueAccent,
+                    ),
+                    title: const Text('Selected Server'),
+                    subtitle: Text(
+                      AppState.instance.selectedServer?.remark ??
+                          'No Server Selected',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      final result = await Navigator.pushNamed(
+                        context,
+                        '/server_selection',
+                      );
+                      if (result == true) {
+                        setState(() {
+                          // Server was selected, update UI
+                        });
+                      }
+                    },
+                  ),
+                  if (appState.selectedServer != null) ...[
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(
+                        Icons.info_outline,
+                        color: Colors.white70,
+                      ),
+                      title: const Text('Address'),
+                      subtitle: Text(appState.selectedServer!.address),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.router, color: Colors.white70),
+                      title: const Text('Port'),
+                      subtitle: Text(appState.selectedServer!.port.toString()),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            CustomCard(
+              title: 'Subscription Status',
+              child: Column(
+                children: [
+                  _buildStatusRow(
+                    'Subscription Link:',
+                    appState.subscriptionLink != null &&
+                            appState.subscriptionLink!.isNotEmpty
+                        ? 'Loaded'
+                        : 'Not Loaded',
+                    appState.subscriptionLink != null &&
+                            appState.subscriptionLink!.isNotEmpty
+                        ? Colors.green
+                        : Colors.red,
+                    Icons.link,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildStatusRow(
+                    'Profile Status:',
+                    isProfileLoading
+                        ? 'Loading...'
+                        : userProfile != null
+                        ? 'Loaded'
+                        : 'Not Loaded',
+                    userProfile != null ? Colors.green : Colors.red,
+                    Icons.account_circle,
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildUserProfileCard(User? user) {
-    final isSubscriptionExpired = false; // همان شرط قبلی
-
-    return CustomCard(
-      isErrorState: isSubscriptionExpired || isDataExhausted,
-      child: Column(
-        children: [
-          ListTile(
-            leading: Image.asset('assets/images/logo.png'),
-            title: Text(
-              userProfile?['full_name'] ?? 'Guest User',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (userProfile?['expiry_date'] != null)
-                  Text(
-                    _formatDate(userProfile!['expiry_date']),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isSubscriptionExpired || isDataExhausted
-                          ? Colors.red[100]
-                          : Colors.white,
-                    ),
-                  ),
-                if (isSubscriptionExpired || isDataExhausted)
-                  Text(
-                    isSubscriptionExpired
-                        // ignore: dead_code
-                        ? 'اشتراک شما به پایان رسیده'
-                        : 'اشتراک شما به پایان رسیده',
-                    style: TextStyle(
-                      color: Colors.red[100],
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (isProfileLoading) const LinearProgressIndicator(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildServerCard(AppState appState) {
-    return CustomCard(
-      child: ListTile(
-        title: const Text(
-          'Select Server',
-          style: TextStyle(fontSize: 18, color: Colors.white),
-        ),
-        subtitle: Text(
-          appState.selectedServer?.remark ?? 'No server selected',
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () async {
-          final result = await Navigator.pushNamed(context, '/servers');
-          if (result == true) {
-            setState(() {});
-          }
-        },
-      ),
-    );
-  }
-
-  Future<void> _updateDataUsage(int bytesUsed) async {
-    try {
-      final user = supabase.auth.currentUser;
-      if (user == null) return;
-
-      // دریافت مقدار فعلی
-      final response = await supabase
-          .from('users')
-          .select('data_usage')
-          .eq('id', user.id)
-          .single();
-
-      final currentUsage = response['data_usage'] ?? 0;
-
-      // آپدیت مقدار جدید
-      await supabase
-          .from('users')
-          .update({
-            'data_usage': currentUsage + bytesUsed,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', user.id);
-
-      debugPrint('Updated data usage to ${currentUsage + bytesUsed}');
-    } catch (e, stackTrace) {
-      debugPrint('Error updating data usage: $e');
-      debugPrint('Stack trace: $stackTrace');
-    }
-  }
-
-  Widget _buildConnectionStatus() {
-    return ValueListenableBuilder<V2RayStatus>(
-      valueListenable: v2rayStatus,
-      builder: (context, status, _) {
-        if (status.state == 'CONNECTED') {
-          final bytesUsed = (status.uploadSpeed + status.downloadSpeed) * 30;
-          _updateDataUsage(bytesUsed);
-        }
-        return CustomCard(
-          backgroundColor: Colors.white,
-          child: Column(
-            children: [
-              const SizedBox(height: 10),
-              if (status.state == 'CONNECTED') ...[
-                Text(' ${status.duration}', style: TextStyle(fontSize: 24)),
-                const SizedBox(height: 10),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildSpeedIndicator(
-                      Icons.upload,
-                      _formatSpeed(status.uploadSpeed),
-                      Colors.red,
-                    ),
-                    _buildSpeedIndicator(
-                      Icons.download,
-                      _formatSpeed(status.downloadSpeed),
-                      Colors.green,
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  String _formatSpeed(int speed) {
-    if (speed < 1024) {
-      return '$speed B/s';
-    } else if (speed < 1024 * 1024) {
-      return '${(speed / 1024).toStringAsFixed(1)} KB/s';
-    } else {
-      return '${(speed / (1024 * 1024)).toStringAsFixed(1)} MB/s';
-    }
-  }
-
-  Widget _buildSpeedIndicator(IconData icon, String speed, Color color) {
-    return Column(
+  Widget _buildStatusRow(
+    String label,
+    String status,
+    Color color,
+    IconData icon,
+  ) {
+    return Row(
       children: [
-        Icon(icon, color: color, size: 28),
-        const SizedBox(height: 4),
+        Icon(icon, color: color, size: 20),
+        const SizedBox(width: 12),
         Text(
-          speed,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          label,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: Colors.white70,
+          ),
+        ),
+        const Spacer(),
+        Text(
+          status,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
         ),
       ],
     );
-  }
-
-  Widget _buildConnectButton() {
-    return ValueListenableBuilder<V2RayStatus>(
-      valueListenable: v2rayStatus,
-      builder: (context, status, _) {
-        final isConnected = status.state == 'CONNECTED';
-        final buttonText = isConnected ? 'DISCONNECT' : 'CONNECT';
-        final buttonColor = isConnected ? Colors.red : Colors.green;
-
-        // بررسی انقضای اشتراک
-        final expiryDate = userProfile?['expiry_date'] != null
-            ? DateTime.tryParse(userProfile!['expiry_date'])
-            : null;
-        final isSubscriptionExpired =
-            expiryDate != null && expiryDate.isBefore(DateTime.now());
-
-        return Center(
-          child: GestureDetector(
-            onTap: isSubscriptionExpired || isDataExhausted
-                ? null // غیرفعال کردن دکمه اگر اشتراک تمام شده یا حجم مصرفی تمام شده باشد
-                : () async {
-                    if (isConnected) {
-                      await flutterV2ray.stopV2Ray();
-                    } else {
-                      await connect();
-                    }
-                  },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: isSubscriptionExpired ? Colors.grey : buttonColor,
-                shape: BoxShape.circle,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    isConnected ? Icons.power_settings_new : Icons.power,
-                    size: 32,
-                    color: Colors.white,
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    isSubscriptionExpired
-                        ? 'EXPIRED'
-                        : isDataExhausted
-                        ? 'NO DATA'
-                        : buttonText,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _handleLogout() async {
-    try {
-      await flutterV2ray.stopV2Ray();
-      await supabase.auth.signOut();
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
-    } catch (e) {
-      _showErrorSnackbar('Logout failed: $e');
-    }
   }
 }
