@@ -31,8 +31,11 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
         colorScheme: ColorScheme.dark(
-          primary: const Color(
-            0xFF6200EE,
+          primary: const Color.fromARGB(
+            166,
+            95,
+            93,
+            96,
           ), // Deep purple for primary actions/branding
           onPrimary: Colors.white,
           secondary: const Color(

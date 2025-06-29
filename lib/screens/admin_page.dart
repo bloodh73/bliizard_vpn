@@ -246,10 +246,14 @@ class _AdminPageState extends State<AdminPage>
         ),
         centerTitle: true,
         bottom: TabBar(
+          indicatorSize: TabBarIndicatorSize.tab,
+          indicatorAnimation: TabIndicatorAnimation.elastic,
+          dividerColor: Colors.transparent,
+          indicatorPadding: const EdgeInsets.symmetric(horizontal: 16),
           controller: _tabController,
           onTap: (index) => setState(() => _currentTabIndex = index),
           indicatorColor: Theme.of(context).colorScheme.secondary,
-          labelColor: Theme.of(context).colorScheme.primary,
+          labelColor: Colors.white,
           unselectedLabelColor: Colors.grey[400],
           tabs: const [
             Tab(text: 'Users'),

@@ -232,6 +232,16 @@ class _LoginPageState extends State<LoginPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  Container(
+                    height: 150,
+                    width: 150,
+                    decoration: BoxDecoration(color: Colors.transparent),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  SizedBox(height: 15),
                   Text(
                     _isSignUp ? 'Create Account' : 'Welcome Back!',
                     style: TextStyle(
@@ -250,44 +260,44 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 32),
                   if (_isSignUp) ...[
-                    TextFormField(
-                      controller: _fullNameController,
-                      decoration: InputDecoration(
-                        labelText: 'Full Name',
-                        hintText: 'Enter your full name',
-                        prefixIcon: const Icon(Icons.person_outline),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: Theme.of(context).colorScheme.primary,
-                            width: 2,
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: Colors.grey.shade700,
-                            width: 1,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: Theme.of(context).colorScheme.secondary,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your full name';
-                        }
-                        return null;
-                      },
-                      keyboardType: TextInputType.name,
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 20),
+                    // TextFormField(
+                    //   controller: _fullNameController,
+                    //   decoration: InputDecoration(
+                    //     labelText: 'Full Name',
+                    //     hintText: 'Enter your full name',
+                    //     prefixIcon: const Icon(Icons.person_outline),
+                    //     border: OutlineInputBorder(
+                    //       borderRadius: BorderRadius.circular(12),
+                    //       borderSide: BorderSide(
+                    //         color: Theme.of(context).colorScheme.primary,
+                    //         width: 2,
+                    //       ),
+                    //     ),
+                    //     enabledBorder: OutlineInputBorder(
+                    //       borderRadius: BorderRadius.circular(12),
+                    //       borderSide: BorderSide(
+                    //         color: Colors.grey.shade700,
+                    //         width: 1,
+                    //       ),
+                    //     ),
+                    //     focusedBorder: OutlineInputBorder(
+                    //       borderRadius: BorderRadius.circular(12),
+                    //       borderSide: BorderSide(
+                    //         color: Theme.of(context).colorScheme.secondary,
+                    //         width: 2,
+                    //       ),
+                    //     ),
+                    //   ),
+                    //   validator: (value) {
+                    //     if (value == null || value.isEmpty) {
+                    //       return 'Please enter your full name';
+                    //     }
+                    //     return null;
+                    //   },
+                    //   keyboardType: TextInputType.name,
+                    //   textInputAction: TextInputAction.next,
+                    // ),
+                    // const SizedBox(height: 20),
                   ],
                   TextFormField(
                     controller: _emailController,

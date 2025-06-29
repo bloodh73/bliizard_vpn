@@ -35,7 +35,10 @@ class CustomCard extends StatelessWidget {
             end: Alignment.bottomRight,
             colors: isErrorState
                 ? [Colors.red[800]!, Colors.red[600]!]
-                : [Colors.blue[800]!, Colors.blue[600]!],
+                : [
+                    const Color.fromARGB(255, 242, 235, 235),
+                    const Color.fromARGB(255, 255, 255, 255),
+                  ],
           ),
           borderRadius: borderRadius ?? BorderRadius.circular(16),
         ),

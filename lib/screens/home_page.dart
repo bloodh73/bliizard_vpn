@@ -386,7 +386,7 @@ class _HomePageState extends State<HomePage> {
               currentAccountPicture: CircleAvatar(
                 backgroundColor: Theme.of(context).colorScheme.secondary,
                 child: Text(
-                  userProfile?['full_name']?[0].toUpperCase() ?? 'U',
+                  userProfile?['full_name']?.toUpperCase() ?? 'U',
                   style: const TextStyle(fontSize: 32, color: Colors.black),
                 ),
               ),
@@ -524,7 +524,7 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.only(top: 8.0),
               child: LinearProgressIndicator(
                 value: progressValue,
-                backgroundColor: Colors.blue[800],
+                backgroundColor: Colors.white24,
                 valueColor: AlwaysStoppedAnimation<Color>(
                   progressValue > 0.8 ? Colors.red : Colors.green,
                 ),
@@ -589,6 +589,7 @@ class _HomePageState extends State<HomePage> {
                   Text('Core Version: ${coreVersion ?? 'N/A'}'),
                   Text(
                     'Selected Server: ${appState.selectedServer?.remark ?? 'None'}',
+                    style: TextStyle(color: Colors.black),
                   ),
                 ],
               );
@@ -613,9 +614,9 @@ class _HomePageState extends State<HomePage> {
                   // حالا منطق رنگ و متن دکمه به درستی کار خواهد کرد
                   Color buttonColor = isConnected
                       ? Colors
-                            .grey // وقتی متصل است
+                            .green // وقتی متصل است
                       : Colors
-                            .redAccent; // وقتی قطع است (یا هر رنگ دیگری برای حالت قطع)
+                            .black38; // وقتی قطع است (یا هر رنگ دیگری برای حالت قطع)
 
                   String buttonText = isConnected ? 'CONNECTED' : 'CONNECT';
 
@@ -689,22 +690,70 @@ class _HomePageState extends State<HomePage> {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: isConnected
-                              ? Colors.greenAccent
-                              : Colors.redAccent,
+                          color: isConnected ? Colors.green : Colors.redAccent,
                         ),
                       ),
-                      Text(
-                        'Upload: ${status.uploadSpeed}',
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                      Text(
-                        'Download: ${status.downloadSpeed}',
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                      Text(
-                        'Delay: ${status.downloadSpeed}',
-                        style: const TextStyle(color: Colors.white70),
+                      SizedBox(height: 10),
+                      Container(
+                        height: MediaQuery.of(context).size.height * 0.14,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              textAlign: TextAlign.center,
+                              status.duration,
+                              style: const TextStyle(
+                                color: Colors.green,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.arrow_upward,
+                                      color: Colors.green,
+                                    ),
+                                    Text(
+                                      'Upload: ${status.uploadSpeed}',
+                                      style: const TextStyle(
+                                        color: Colors.green,
+                                        fontSize: 20,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(width: 40),
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.arrow_downward,
+                                      color: Colors.red,
+                                    ),
+                                    Text(
+                                      'Download: ${status.downloadSpeed}',
+                                      style: const TextStyle(
+                                        color: Colors.red,
+                                        fontSize: 20,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   );
@@ -722,12 +771,16 @@ class _HomePageState extends State<HomePage> {
                       Icons.cloud_queue,
                       color: Colors.blueAccent,
                     ),
-                    title: const Text('Selected Server'),
+                    title: const Text(
+                      'Selected Server',
+                      style: TextStyle(color: Colors.black),
+                    ),
                     subtitle: Text(
                       AppState.instance.selectedServer?.remark ??
                           'No Server Selected',
+
                       style: const TextStyle(
-                        fontWeight: FontWeight.bold,
+                        color: Colors.black45,
                         fontSize: 16,
                       ),
                     ),
@@ -745,19 +798,32 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
                   if (appState.selectedServer != null) ...[
-                    const Divider(),
+                    const Divider(color: Colors.grey),
                     ListTile(
                       leading: const Icon(
                         Icons.info_outline,
-                        color: Colors.white70,
+                        color: Colors.blue,
                       ),
-                      title: const Text('Address'),
-                      subtitle: Text(appState.selectedServer!.address),
+                      title: const Text(
+                        'Address',
+                        style: TextStyle(color: Colors.black),
+                      ),
+                      subtitle: Text(
+                        appState.selectedServer!.address,
+                        style: TextStyle(color: Colors.black45),
+                      ),
                     ),
+                    const Divider(color: Colors.grey),
                     ListTile(
-                      leading: const Icon(Icons.router, color: Colors.white70),
-                      title: const Text('Port'),
-                      subtitle: Text(appState.selectedServer!.port.toString()),
+                      leading: const Icon(Icons.router, color: Colors.blue),
+                      title: const Text(
+                        'Port',
+                        style: TextStyle(color: Colors.black),
+                      ),
+                      subtitle: Text(
+                        appState.selectedServer!.port.toString(),
+                        style: TextStyle(color: Colors.black45),
+                      ),
                     ),
                   ],
                 ],
@@ -815,7 +881,7 @@ class _HomePageState extends State<HomePage> {
           style: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w500,
-            color: Colors.white70,
+            color: Colors.black,
           ),
         ),
         const Spacer(),
