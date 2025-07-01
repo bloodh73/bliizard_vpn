@@ -42,26 +42,30 @@ class MyApp extends StatelessWidget {
         brightness: Brightness.light,
         // تعریف ColorScheme جدید
         colorScheme: ColorScheme.light(
-          primary: const Color(0xFF007BFF), // یک آبی جذاب برای Primary
+          primary: const Color(
+            0xFF007BFF,
+          ), // Keep a strong blue for primary actions
           onPrimary: Colors.white,
           secondary: const Color(
-            0xFF03DAC6,
-          ), // یک فیروزه‌ای روشن برای Secondary
-          onSecondary: Colors.black,
-          surface: Colors.white, // رنگ پس‌زمینه کارت‌ها و سطوح
+            0xFF00C896,
+          ), // A slightly softer, more harmonious green/turquoise
+          onSecondary: Colors.white,
+          surface: Colors.white, // For cards, dialogs, etc.
           onSurface: Colors.black87,
-          background: const Color(0xFFF0F2F5), // رنگ پس‌زمینه کلی برنامه
+          background: const Color(
+            0xFFF8F9FA,
+          ), // A very light grey for main backgrounds
           onBackground: Colors.black87,
           error: Colors.redAccent,
           onError: Colors.white,
-          // اضافه کردن رنگ‌های اضافی برای وضعیت‌ها
-          tertiary: const Color(0xFF28A745), // رنگ سبز برای موفقیت
+          // Custom colors for success and warning
+          tertiary: const Color(0xFF28A745), // Success (Green)
           onTertiary: Colors.white,
-          tertiaryContainer: const Color(0xFFFFC107), // رنگ زرد برای هشدار
-          onTertiaryContainer: Colors.black,
+          tertiaryContainer: const Color(0xFFFFC107), // Warning (Yellow)
+          onTertiaryContainer: Colors.black87,
         ),
         scaffoldBackgroundColor: const Color(
-          0xFFF0F2F5,
+          0xFFF8F9FA,
         ), // رنگ پس‌زمینه Scaffold
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF007BFF),
@@ -75,82 +79,49 @@ class MyApp extends StatelessWidget {
           ),
         ),
         cardTheme: CardThemeData(
-          elevation: 4, // افزایش سایه کارت‌ها
+          elevation: 4,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16), // گوشه‌های گردتر
+            borderRadius: BorderRadius.circular(
+              12,
+            ), // Consistent with input fields
           ),
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: Colors.white, // رنگ پس‌زمینه کارت
-        ),
-        buttonTheme: ButtonThemeData(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          buttonColor: const Color(0xFF007BFF),
-          textTheme: ButtonTextTheme.primary,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            minimumSize: const Size(
-              double.infinity,
-              50,
-            ), // دکمه‌های با ارتفاع بیشتر و تمام عرض
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            backgroundColor: const Color(0xFF007BFF),
-            foregroundColor: Colors.white,
-            elevation: 5,
-            textStyle: const TextStyle(
-              fontFamily: 'SM',
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF007BFF),
-            textStyle: const TextStyle(fontFamily: 'SM', fontSize: 16),
-          ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
           contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 15,
+            vertical: 16,
+            horizontal: 16,
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none, // حذف BorderSide پیش‌فرض
+            borderSide: BorderSide.none, // Start with no visible border
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(
-              color: Color(
-                0xFFE0E0E0,
-              ), // یک رنگ خاکستری روشن برای border غیرفعال
+            borderSide: BorderSide(
+              color: Colors.grey[300]!,
               width: 1,
-            ),
+            ), // Subtle border
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(
-              color: Color(0xFF007BFF), // رنگ Primary برای border فعال
+            borderSide: BorderSide(
+              color: Theme.of(context).colorScheme.primary,
               width: 2,
-            ),
+            ), // Highlight on focus
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+            borderSide: const BorderSide(color: Colors.red, width: 2),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: const BorderSide(color: Colors.red, width: 2),
           ),
-          labelStyle: TextStyle(fontFamily: 'SM', color: Colors.grey[700]),
-          hintStyle: TextStyle(fontFamily: 'SM', color: Colors.grey[500]),
+          hintStyle: TextStyle(color: Colors.grey[500], fontFamily: 'SM'),
+          labelStyle: TextStyle(color: Colors.grey[700], fontFamily: 'SM'),
         ),
         listTileTheme: ListTileThemeData(
           iconColor: const Color(0xFF007BFF), // آیکون‌ها به رنگ Primary

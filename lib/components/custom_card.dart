@@ -8,6 +8,7 @@ class CustomCard extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final double? elevation;
   final BorderRadius? borderRadius;
+  final String? title;
 
   const CustomCard({
     super.key,
@@ -17,43 +18,82 @@ class CustomCard extends StatelessWidget {
     this.padding,
     this.elevation,
     this.borderRadius,
-    required String title,
+    this.title,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Determine the base colors for the gradient
+    final Color startColor = isErrorState
+        ? Theme.of(context).colorScheme.error.withOpacity(0.9)
+        : Theme.of(context).colorScheme.surface;
+    final Color endColor = isErrorState
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.surface.withOpacity(
+            0.95,
+          ); // Slightly less opaque for subtle shine
+
+    final Color borderColor = isErrorState
+        ? Theme.of(context).colorScheme.errorContainer
+        : Colors.grey.shade300; // Softer border for non-error state
+
+    final BorderRadius effectiveBorderRadius =
+        borderRadius ??
+        BorderRadius.circular(15); // Slightly larger radius for a modern look
+
     return Card(
-      elevation: elevation ?? 4,
+      elevation: elevation ?? 6, // Increased elevation for a more lifted look
       shape: RoundedRectangleBorder(
-        borderRadius: borderRadius ?? BorderRadius.circular(16),
+        borderRadius: effectiveBorderRadius,
+        side: BorderSide(color: borderColor, width: 0.8), // Subtle border
       ),
-      color: backgroundColor,
+      color:
+          backgroundColor, // This will be overridden by BoxDecoration gradient
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: isErrorState
-                ? [Colors.red[800]!, Colors.red[600]!]
-                : [
-                    const Color.fromARGB(
-                      255,
-                      255,
-                      255,
-                      255,
-                    ), // Lighter shade of white
-                    const Color.fromARGB(
-                      255,
-                      240,
-                      240,
-                      240,
-                    ), // Slightly darker shade of white
-                  ],
+            colors: [startColor, endColor],
           ),
-          borderRadius: borderRadius ?? BorderRadius.circular(16),
+          borderRadius: effectiveBorderRadius,
+          boxShadow: [
+            BoxShadow(
+              color:
+                  (isErrorState
+                          ? Theme.of(context).colorScheme.error
+                          : Colors.grey.shade300)
+                      .withOpacity(0.5),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        padding: padding ?? const EdgeInsets.all(16),
-        child: child,
+        padding:
+            padding ??
+            const EdgeInsets.all(
+              18,
+            ), // Increased padding for more breathing room
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title != null) ...[
+              Text(
+                title!,
+                style: TextStyle(
+                  fontSize: 19, // Slightly larger title
+                  fontWeight: FontWeight.bold,
+                  color: isErrorState
+                      ? Theme.of(context).colorScheme.onError
+                      : Theme.of(context).colorScheme.onSurface,
+                  fontFamily: 'SM',
+                ),
+              ),
+              const SizedBox(height: 12), // More space after title
+            ],
+            child,
+          ],
+        ),
       ),
     );
   }

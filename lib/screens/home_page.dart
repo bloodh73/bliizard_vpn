@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:blizzard_vpn/components/custom_card.dart';
+import 'package:blizzard_vpn/components/custom_color.dart'; // Assuming custom_color.dart defines primery
 import 'package:blizzard_vpn/components/custom_snackbar.dart';
 import '../utils/date_utils.dart' as date_utils;
 import 'package:blizzard_vpn/models/app_state.dart';
@@ -19,9 +20,17 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   bool get isDataExhausted {
-    return userProfile?['data_limit'] != null &&
-        userProfile?['data_usage'] != null &&
-        userProfile!['data_usage'] >= userProfile!['data_limit'];
+    if (userProfile == null ||
+        userProfile!['data_limit'] == null ||
+        userProfile!['data_usage_down'] == null ||
+        userProfile!['data_usage_up'] == null) {
+      return false; // اگر اطلاعات کافی نیست، فرض می‌کنیم داده تمام نشده.
+    }
+    final totalUsage =
+        (userProfile!['data_usage_down'] as int) +
+        (userProfile!['data_usage_up'] as int);
+    final dataLimit = userProfile!['data_limit'] as int;
+    return totalUsage >= dataLimit;
   }
 
   Timer? _periodicCheckTimer;
@@ -119,7 +128,7 @@ class _HomePageState extends State<HomePage> {
       flutterV2ray.startV2Ray(
         remark: remark,
 
-        notificationDisconnectButtonName: "DISCONNECT",
+        notificationDisconnectButtonName: "اتصال برقرار نیست",
         config: '',
       );
     } else {
@@ -296,7 +305,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _getFallbackUrl() {
-    return "vmess://eyJhZGQiOiIxMjcuMC4wLjEiLCJhaWQiOiIwIiwiYWxwbiI6IiIsImhvc3QiOiIiLCJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIsIm5ldCI6InRjcCIsInBhdGgiOiIiLCJwb3J0IjoiNDQzIiwicHMyIjoiZnJlZSBzZXJ2ZXIiLCJzY3kiOiJhdXRvIiwicmVtYXJrIjoiZnJlZSBzZXJ2ZXIiLCJzbmkiOiIiLCJ0bHMiOiIiLCJ0eXBlIjoiaHR0cCIsInYiOiIyIiwidiNpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIsInBvcnRzIjoieXl5In0=";
+    return "vmess://eyJhZGQiOiIxMjcuMC4wLjEiLCJhaWQiOiIwIiwiYWxwbiI6IiIsImhvc3QiOiIiLCJpZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIsIm5ldCI6InRjcCIsInBhdGgiOiIiLCJwb3J0IjoiNDQzIiwicHMyIjoiZnJlZSBzZXJ2ZXIiLCJzY3kiOiJhdXRvIiwicmVtYXJrIjoiZnJlZSBzZXJ2ZXIiLCJzbmkiOiIiLCJ0bHMiOiIiLCJ0eXBlIjoiaHR0cCJ9";
   }
 
   bool _isValidV2RayUrl(String url) {
@@ -434,14 +443,12 @@ class _HomePageState extends State<HomePage> {
       child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isSubscriptionExpired
-                ? [Colors.red[900]!, Colors.red[700]!]
-                : [
-                    Theme.of(context).colorScheme.primary.withOpacity(0.8),
-                    Theme.of(context).colorScheme.primary,
-                  ], // Themed gradient
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              CustomColor.primery.withOpacity(0.9), // Using CustomColor
+              CustomColor.primery,
+            ],
           ),
         ),
         child: Column(
@@ -452,17 +459,24 @@ class _HomePageState extends State<HomePage> {
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color:
+                      Colors.white, // Ensure text is visible on dark background
                 ),
               ),
               accountEmail: Text(
                 supabase.auth.currentUser?.email ?? 'ایمیل موجود نیست',
-                style: const TextStyle(fontSize: 14),
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.white70,
+                ), // Softer color for email
               ),
               currentAccountPicture: CircleAvatar(
-                backgroundColor: Theme.of(context).colorScheme.secondary,
+                backgroundColor: Colors.white.withOpacity(
+                  0.2,
+                ), // Lighter circle avatar
                 child: Text(
-                  userProfile?['full_name']?.toUpperCase() ?? 'U',
-                  style: const TextStyle(fontSize: 32, color: Colors.black),
+                  userProfile?['full_name'][0]?.toUpperCase() ?? 'U',
+                  style: const TextStyle(fontSize: 32, color: Colors.white),
                 ),
               ),
               decoration: const BoxDecoration(color: Colors.transparent),
@@ -520,7 +534,7 @@ class _HomePageState extends State<HomePage> {
                     ListTile(
                       leading: Icon(
                         Icons.admin_panel_settings,
-                        color: Theme.of(context).colorScheme.secondary,
+                        color: CustomColor.secondary, // Using CustomColor
                       ),
                       title: const Text(
                         'پنل ادمین',
@@ -535,9 +549,7 @@ class _HomePageState extends State<HomePage> {
                   _buildDrawerDivider(),
                   _buildDrawerItem(
                     icon: Icons.account_circle,
-
                     title: 'Account Type',
-
                     value:
                         userProfile?['subscription_type']
                             ?.toString()
@@ -546,7 +558,10 @@ class _HomePageState extends State<HomePage> {
                   ),
                   _buildDrawerDivider(),
                   ListTile(
-                    leading: const Icon(Icons.settings, color: Colors.white),
+                    leading: const Icon(
+                      Icons.settings,
+                      color: Colors.white70,
+                    ), // Softer icon color
                     title: const Text(
                       'تنظیمات',
                       style: TextStyle(color: Colors.white, fontFamily: 'SM'),
@@ -557,7 +572,10 @@ class _HomePageState extends State<HomePage> {
                   ),
                   _buildDrawerDivider(),
                   ListTile(
-                    leading: const Icon(Icons.logout, color: Colors.white),
+                    leading: const Icon(
+                      Icons.logout,
+                      color: Colors.white70,
+                    ), // Softer icon color
                     title: const Text(
                       'خروج از حساب',
                       style: TextStyle(color: Colors.white, fontFamily: 'SM'),
@@ -582,11 +600,14 @@ class _HomePageState extends State<HomePage> {
     VoidCallback? onTap,
   }) {
     return ListTile(
-      leading: Icon(icon, color: Colors.white70),
+      leading: Icon(icon, color: Colors.white), // Stronger white for icons
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(color: Colors.white70)),
+          Text(
+            title,
+            style: const TextStyle(color: Colors.white),
+          ), // Stronger white for title
           if (value != null)
             Text(
               value,
@@ -601,9 +622,16 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.only(top: 8.0),
               child: LinearProgressIndicator(
                 value: progressValue,
-                backgroundColor: Colors.white24,
+                backgroundColor:
+                    Colors.white30, // Slightly more opaque background
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  progressValue > 0.8 ? Colors.red : Colors.green,
+                  progressValue > 0.8
+                      ? Colors
+                            .redAccent // Red for high usage
+                      : (progressValue > 0.5
+                            ? Colors.orangeAccent
+                            : Colors
+                                  .greenAccent), // Orange for medium, green for low
                 ),
               ),
             ),
@@ -615,7 +643,9 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildDrawerDivider() {
     return Divider(
-      color: Colors.blue[800]?.withOpacity(0.5),
+      color: Colors.blue[900]?.withOpacity(
+        0.6,
+      ), // Darker, more prominent divider
       height: 1,
       thickness: 1,
       indent: 16,
@@ -637,11 +667,25 @@ class _HomePageState extends State<HomePage> {
         userProfile!['data_usage'] >= userProfile!['data_limit'];
 
     return Scaffold(
+      // Apply a subtle background to the entire scaffold body
+      backgroundColor: Colors.grey[50], // Very light grey background
       appBar: AppBar(
-        title: Text(userProfile?['full_name'] ?? 'Guest'),
+        elevation: 0,
+        centerTitle: true,
+        surfaceTintColor: CustomColor.primery, // Using CustomColor
+        backgroundColor: CustomColor.primery, // Using CustomColor
+        title: Text(
+          userProfile?['full_name'] ?? 'Guest',
+          style: const TextStyle(
+            color: Colors.white, // Changed to white for better contrast
+            fontFamily: 'SM',
+            fontSize: 20, // Slightly larger title
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         leading: Builder(
           builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
+            icon: const Icon(Icons.menu, color: Colors.white), // White icon
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
@@ -649,13 +693,18 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: Icon(
               Icons.refresh,
-              color: isRefreshing ? Colors.grey : Colors.green,
+              color: isRefreshing
+                  ? Colors.grey
+                  : Colors.white, // White icon for refresh
             ),
             onPressed: isRefreshing ? null : refreshServers,
             tooltip: 'Refresh Servers',
           ),
           IconButton(
-            icon: const Icon(Icons.info_outline),
+            icon: const Icon(
+              Icons.info_outline,
+              color: Colors.white70,
+            ), // White icon
             onPressed: () {
               showAboutDialog(
                 context: context,
@@ -666,7 +715,7 @@ class _HomePageState extends State<HomePage> {
                   Text('Core Version: ${coreVersion ?? 'N/A'}'),
                   Text(
                     'Selected Server: ${appState.selectedServer?.remark ?? 'None'}',
-                    style: TextStyle(color: Colors.black),
+                    style: const TextStyle(color: Colors.black),
                   ),
                 ],
               );
@@ -681,36 +730,36 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             CustomCard(
-              title: 'Connection Status',
+              title: 'وضعیت اتصال',
               child: ValueListenableBuilder<V2RayStatus>(
                 valueListenable: v2rayStatus,
                 builder: (context, status, child) {
-                  // اصلاح: بررسی کنید که status.state برابر با "CONNECTED" باشد
                   final isConnected = status.state == "CONNECTED";
 
-                  // حالا منطق رنگ و متن دکمه به درستی کار خواهد کرد
                   Color buttonColor = isConnected
                       ? Colors
-                            .green // وقتی متصل است
-                      : Colors
-                            .black38; // وقتی قطع است (یا هر رنگ دیگری برای حالت قطع)
+                            .green
+                            .shade600 // Deeper green when connected
+                      : Colors.redAccent.shade400; // More vibrant redAccent
 
                   String buttonText = isConnected ? 'CONNECTED' : 'CONNECT';
 
                   if (isConnecting) {
                     buttonText = 'Connecting...';
                   } else if (isSubscriptionExpired) {
-                    buttonColor = Colors.grey;
+                    buttonColor =
+                        Colors.grey.shade600; // Darker grey for disabled
                   } else if (isDataExhausted) {
-                    buttonColor = Colors.grey;
+                    buttonColor =
+                        Colors.grey.shade600; // Darker grey for disabled
                   }
 
                   return Column(
                     children: [
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
-                        width: 150,
-                        height: 150,
+                        width: 160, // Slightly larger button
+                        height: 160,
                         decoration: BoxDecoration(
                           color: isSubscriptionExpired || isDataExhausted
                               ? Colors.grey[700]
@@ -718,9 +767,11 @@ class _HomePageState extends State<HomePage> {
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: buttonColor.withOpacity(0.4),
-                              blurRadius: 15,
-                              spreadRadius: 5,
+                              color: buttonColor.withOpacity(
+                                0.6,
+                              ), // More prominent glow
+                              blurRadius: 20, // Increased blur
+                              spreadRadius: 7, // Increased spread
                             ),
                           ],
                         ),
@@ -731,19 +782,20 @@ class _HomePageState extends State<HomePage> {
                                   isConnecting)
                               ? null
                               : _handleConnectDisconnect,
-                          borderRadius: BorderRadius.circular(75),
+                          borderRadius: BorderRadius.circular(
+                            80,
+                          ), // Match new size
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
                                 isConnected
-                                    ? Icons
-                                          .power_settings_new // آیکون برای حالت متصل
-                                    : Icons.power, // آیکون برای حالت قطع
-                                size: 48,
+                                    ? Icons.power_settings_new
+                                    : Icons.power,
+                                size: 55, // Larger icon
                                 color: Colors.white,
                               ),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 12), // More space
                               Text(
                                 isSubscriptionExpired
                                     ? 'اتمام تاریخ'
@@ -752,7 +804,7 @@ class _HomePageState extends State<HomePage> {
                                     : buttonText,
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 18,
+                                  fontSize: 20, // Larger text
                                   fontWeight: FontWeight.bold,
                                   fontFamily: 'GM',
                                 ),
@@ -761,23 +813,33 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 25), // More space
                       // نمایش وضعیت متنی
                       Text(
-                        status
-                            .state, // نیازی به .toUpperCase() نیست چون خودش هست
+                        status.state,
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: isConnected ? Colors.green : Colors.redAccent,
+                          fontSize: 18, // Larger status text
+                          fontWeight: FontWeight.w700, // Bolder
+                          color: isConnected
+                              ? Colors.green.shade700
+                              : Colors.redAccent.shade700, // Deeper colors
                         ),
                       ),
-                      SizedBox(height: 10),
+                      const SizedBox(height: 15), // More space
                       Container(
-                        height: MediaQuery.of(context).size.height * 0.14,
+                        height:
+                            MediaQuery.of(context).size.height *
+                            0.16, // Slightly larger container
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
-                          borderRadius: BorderRadius.circular(10),
+                          color: Colors
+                              .blueGrey[50], // Subtle background for traffic stats
+                          border: Border.all(
+                            color: Colors.grey.shade300,
+                          ), // Lighter border
+                          borderRadius: BorderRadius.circular(
+                            15,
+                          ), // Consistent rounded corners
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -786,50 +848,101 @@ class _HomePageState extends State<HomePage> {
                               textAlign: TextAlign.center,
                               status.duration,
                               style: const TextStyle(
-                                color: Colors.green,
-                                fontSize: 22,
+                                color: Colors
+                                    .indigo, // Distinct color for duration
+                                fontSize: 24, // Larger duration text
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
+                            const SizedBox(height: 10),
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
-                                Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.arrow_upward,
-                                      color: Colors.green,
-                                    ),
-                                    Text(
-                                      'آپلود: ${status.uploadSpeed}',
-                                      style: const TextStyle(
-                                        color: Colors.green,
-                                        fontFamily: 'SM',
-                                        fontSize: 20,
+                                Expanded(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.arrow_upward,
+                                        color: Colors
+                                            .green
+                                            .shade700, // Deeper green
+                                        size: 28,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 8),
+                                      Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          const Text(
+                                            'آپلود',
+                                            style: TextStyle(
+                                              color: Colors.grey,
+                                              fontFamily: 'SM',
+                                              fontSize: 18,
+                                            ),
+                                          ),
+                                          Text(
+                                            status.uploadSpeed.toString(),
+                                            style: const TextStyle(
+                                              color: CustomColor.darkBackground,
+                                              fontFamily: 'SM',
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                SizedBox(width: 40),
-                                Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.arrow_downward,
-                                      color: Colors.red,
-                                    ),
-                                    Text(
-                                      'دانلود: ${status.downloadSpeed}',
-                                      style: const TextStyle(
-                                        color: Colors.red,
-                                        fontFamily: 'SM',
-                                        fontSize: 20,
+                                Container(
+                                  height: 60,
+                                  width: 1,
+                                  color: Colors
+                                      .grey
+                                      .shade300, // Divider between stats
+                                ),
+                                Expanded(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.arrow_downward,
+                                        color:
+                                            Colors.red.shade700, // Deeper red
+                                        size: 28,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 8),
+                                      Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
+                                        children: [
+                                          const Text(
+                                            'دانلود',
+                                            style: TextStyle(
+                                              color: Colors.grey,
+                                              fontFamily: 'SM',
+                                              fontSize: 18,
+                                            ),
+                                          ),
+                                          Text(
+                                            status.downloadSpeed.toString(),
+                                            style: const TextStyle(
+                                              color: CustomColor.darkBackground,
+                                              fontFamily: 'SM',
+                                              fontSize: 22,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
@@ -841,32 +954,44 @@ class _HomePageState extends State<HomePage> {
                 },
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20), // More space between cards
             CustomCard(
-              title: 'Server Information',
+              title: 'اطلاعات سرور',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   ListTile(
                     leading: const Icon(
                       Icons.cloud_queue,
-                      color: Colors.blueAccent,
+                      color: CustomColor.secondary, // Using CustomColor
+                      size: 20, // Larger icon
                     ),
                     title: const Text(
                       'انتخاب سرور',
-                      style: TextStyle(color: Colors.black, fontFamily: 'SM'),
+                      style: TextStyle(
+                        color: Colors.black87, // Slightly darker
+                        fontFamily: 'SM',
+                        fontSize: 16,
+                      ),
                     ),
                     subtitle: Text(
                       AppState.instance.selectedServer?.remark.toString() ??
                           'سرور موجود نیست',
-
-                      style: const TextStyle(color: Colors.black, fontSize: 15),
+                      style: const TextStyle(
+                        color: Colors.black54, // Softer subtitle
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                    trailing: const Icon(
+                    trailing: Icon(
                       Icons.arrow_forward_ios,
-                      size: 25,
-                      color: Colors.blue,
+                      size: 25, // Slightly smaller arrow
+                      color: CustomColor.darkBackground, // Using CustomColor
                     ),
+                    // trailing: RotatedBox(
+                    //   quarterTurns: 5,
+                    //   child: Text('کلیک کنید'),
+                    // ),
                     onTap: () async {
                       final result = await Navigator.pushNamed(
                         context,
@@ -880,40 +1005,64 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
                   if (appState.selectedServer != null) ...[
-                    const Divider(color: Colors.grey),
-                    ListTile(
-                      leading: const Icon(
-                        Icons.info_outline,
-                        color: Colors.blue,
-                      ),
-                      title: const Text(
-                        'آدرس',
-                        style: TextStyle(color: Colors.black, fontFamily: 'SM'),
-                      ),
-                      subtitle: Text(
-                        appState.selectedServer!.address,
-                        style: TextStyle(color: Colors.black),
-                      ),
-                    ),
-                    const Divider(color: Colors.grey),
-                    ListTile(
-                      leading: const Icon(Icons.router, color: Colors.blue),
-                      title: const Text(
-                        'پورت',
-                        style: TextStyle(color: Colors.black, fontFamily: 'SM'),
-                      ),
-                      subtitle: Text(
-                        appState.selectedServer!.port.toString(),
-                        style: TextStyle(color: Colors.black),
-                      ),
-                    ),
+                    // Divider(
+                    //   color: Colors.grey.shade300,
+                    //   height: 1,
+                    // ), // Lighter divider
+                    // // ListTile(
+                    // //   leading: const Icon(
+                    // //     Icons.info_outline,
+                    // //     color: CustomColor.secondary, // Using CustomColor
+                    // //     size: 28,
+                    // //   ),
+                    // //   title: const Text(
+                    // //     'آدرس',
+                    // //     style: TextStyle(
+                    // //       color: Colors.black87,
+                    // //       fontFamily: 'SM',
+                    // //       fontSize: 17,
+                    // //     ),
+                    // //   ),
+                    // //   subtitle: Text(
+                    // //     appState.selectedServer!.address,
+                    // //     style: const TextStyle(
+                    // //       color: Colors.black54,
+                    // //       fontSize: 16,
+                    // //       fontWeight: FontWeight.w500,
+                    // //     ),
+                    // //   ),
+                    // // ),
+                    // // Divider(color: Colors.grey.shade300, height: 1),
+                    // // ListTile(
+                    // //   leading: const Icon(
+                    // //     Icons.router,
+                    // //     color: CustomColor.secondary,
+                    // //     size: 28,
+                    // //   ), // Using CustomColor
+                    // //   title: const Text(
+                    // //     'پورت',
+                    // //     style: TextStyle(
+                    // //       color: Colors.black87,
+                    // //       fontFamily: 'SM',
+                    // //       fontSize: 17,
+                    // //     ),
+                    // //   ),
+                    //   subtitle: Text(
+                    //     appState.selectedServer!.port.toString(),
+                    //     style: const TextStyle(
+                    //       color: Colors.black54,
+                    //       fontSize: 16,
+                    //       fontWeight: FontWeight.w500,
+                    //     ),
+                    //   ),
+                    // ),
                   ],
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             CustomCard(
-              title: 'Subscription Status',
+              title: 'وضعیت اشتراک',
               child: Column(
                 children: [
                   _buildStatusRow(
@@ -924,11 +1073,11 @@ class _HomePageState extends State<HomePage> {
                         : 'Not Loaded',
                     appState.subscriptionLink != null &&
                             appState.subscriptionLink!.isNotEmpty
-                        ? Colors.green
-                        : Colors.red,
+                        ? Colors.green.shade600
+                        : Colors.red.shade600,
                     Icons.link,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12), // More space between rows
                   _buildStatusRow(
                     'وضعیت پروفایل:',
                     isProfileLoading
@@ -936,7 +1085,9 @@ class _HomePageState extends State<HomePage> {
                         : userProfile != null
                         ? 'Loaded'
                         : 'Not Loaded',
-                    userProfile != null ? Colors.green : Colors.red,
+                    userProfile != null
+                        ? Colors.green.shade600
+                        : Colors.red.shade600,
                     Icons.account_circle,
                   ),
                 ],
@@ -956,21 +1107,21 @@ class _HomePageState extends State<HomePage> {
   ) {
     return Row(
       children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(width: 12),
+        Icon(icon, color: color, size: 22), // Slightly larger icon
+        const SizedBox(width: 15), // More space
         Text(
           label,
           style: const TextStyle(
-            fontSize: 15,
+            fontSize: 16, // Slightly larger label
             fontWeight: FontWeight.w500,
-            color: Colors.black,
+            color: Colors.black87,
           ),
         ),
         const Spacer(),
         Text(
           status,
           style: TextStyle(
-            fontSize: 15,
+            fontSize: 16, // Slightly larger status text
             fontWeight: FontWeight.bold,
             color: color,
           ),

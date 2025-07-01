@@ -1,4 +1,5 @@
 // lib/screens/admin_page.dart
+import 'package:blizzard_vpn/components/custom_color.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../utils/date_utils.dart' as date_utils;
@@ -292,10 +293,12 @@ class _AdminPageState extends State<AdminPage>
                   controller: emailController,
                   decoration: const InputDecoration(labelText: 'ایمیل'),
                 ),
+                SizedBox(height: 15),
                 TextField(
                   controller: fullNameController,
                   decoration: const InputDecoration(labelText: 'نام'),
                 ),
+                SizedBox(height: 15),
                 TextField(
                   controller: dataLimitController,
                   decoration: const InputDecoration(
@@ -303,6 +306,7 @@ class _AdminPageState extends State<AdminPage>
                   ), // Label in GB
                   keyboardType: TextInputType.number,
                 ),
+                SizedBox(height: 15),
                 TextField(
                   controller: expiryDateController,
                   decoration: const InputDecoration(labelText: 'تاریخ انقضا'),
@@ -320,6 +324,7 @@ class _AdminPageState extends State<AdminPage>
                     }
                   },
                 ),
+                SizedBox(height: 15),
                 DropdownButtonFormField<String>(
                   value: subscriptionType,
                   decoration: const InputDecoration(
@@ -339,6 +344,7 @@ class _AdminPageState extends State<AdminPage>
                     }
                   },
                 ),
+                SizedBox(height: 15),
                 Row(
                   children: [
                     const Text('ادمین:'),
@@ -359,10 +365,24 @@ class _AdminPageState extends State<AdminPage>
           ),
           actions: [
             TextButton(
+              style: TextButton.styleFrom(
+                // backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
               onPressed: () => Navigator.pop(context),
-              child: const Text('انصراف'),
+              child: const Text('انصراف', style: TextStyle(color: Colors.red)),
             ),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
               onPressed: () {
                 final int? dataLimitBytes =
                     (double.tryParse(dataLimitController.text) != null
@@ -392,11 +412,24 @@ class _AdminPageState extends State<AdminPage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Admin Panel',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        leading: GestureDetector(
+          onTap: () {
+            Navigator.of(context).pop();
+          },
+          child: Icon(Icons.arrow_back_ios),
         ),
         centerTitle: true,
+        surfaceTintColor: CustomColor.primery, // Using CustomColor
+        backgroundColor: CustomColor.primery, // Using CustomColor
+        title: const Text(
+          'پنل مدیریت',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontFamily: 'SM',
+          ),
+        ),
+
         bottom: TabBar(
           indicatorSize: TabBarIndicatorSize.tab,
           indicatorAnimation: TabIndicatorAnimation.elastic,
@@ -405,8 +438,8 @@ class _AdminPageState extends State<AdminPage>
           controller: _tabController,
           onTap: (index) => setState(() => _currentTabIndex = index),
           indicatorColor: Theme.of(context).colorScheme.secondary,
-          labelColor: Colors.black,
-          unselectedLabelColor: Colors.black,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.grey,
           labelStyle: TextStyle(fontFamily: 'SM'),
           tabs: const [
             Tab(text: 'یورز ها'),
@@ -439,6 +472,9 @@ class _AdminPageState extends State<AdminPage>
                 ),
                 const SizedBox(height: 10),
                 ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: CustomColor.primery,
+                  ),
                   onPressed: _loadData,
                   icon: const Icon(Icons.refresh),
                   label: const Text('Refresh'),
@@ -509,6 +545,15 @@ class _AdminPageState extends State<AdminPage>
                       Align(
                         alignment: Alignment.bottomRight,
                         child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
                           onPressed: () => _showEditUserDialog(user),
                           child: const Text(
                             'ویرایش',
@@ -525,132 +570,134 @@ class _AdminPageState extends State<AdminPage>
   }
 
   Widget _buildSubscriptionsTab() {
-    return _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : RefreshIndicator(
-            onRefresh: _loadData,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _urlController,
-                          decoration: const InputDecoration(
-                            labelText: 'New Subscription URL',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    } else {
+      return RefreshIndicator(
+        onRefresh: _loadData,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _urlController,
+                      decoration: const InputDecoration(
+                        labelText: 'New Subscription URL',
+                        border: OutlineInputBorder(),
                       ),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: _addSubscription,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text('اضافه کردن'),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: _subscriptions.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text(
-                                'No subscriptions found.',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              ElevatedButton.icon(
-                                onPressed: _loadData,
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('Refresh'),
-                              ),
-                            ],
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: _addSubscription,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('اضافه کردن'),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _subscriptions.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'No subscriptions found.',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
                           ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _subscriptions.length,
-                          itemBuilder: (context, index) {
-                            final sub = _subscriptions[index];
-                            final isActive = sub['is_active'] == true;
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 16),
-                              elevation: 2,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            onPressed: _loadData,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Refresh'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Directionality(
+                      textDirection: TextDirection.ltr,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _subscriptions.length,
+                        itemBuilder: (context, index) {
+                          final sub = _subscriptions[index];
+                          final isActive = sub['is_active'] == true;
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ListTile(
+                              title: Text(sub['url'] ?? 'N/A'),
+                              subtitle: Text(
+                                'Created: ${date_utils.formatToJalali(sub['created_at'])}',
+                                style: TextStyle(color: Colors.green),
                               ),
-                              child: ListTile(
-                                title: Text(sub['url'] ?? 'N/A'),
-                                subtitle: Text(
-                                  'Created: ${date_utils.formatToJalali(sub['created_at'])}',
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    isActive
-                                        ? Icon(
-                                            Icons.check_circle_sharp,
-                                            color: Colors.green,
-                                          )
-                                        : ElevatedButton(
-                                            onPressed: () =>
-                                                _activateSubscription(
-                                                  sub['id'].toString(),
-                                                ),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Theme.of(
-                                                context,
-                                              ).colorScheme.primary,
-                                              foregroundColor: Colors.white,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  isActive
+                                      ? Icon(
+                                          Icons.check_circle_sharp,
+                                          color: Colors.green,
+                                        )
+                                      : ElevatedButton(
+                                          onPressed: () =>
+                                              _activateSubscription(
+                                                sub['id'].toString(),
                                               ),
-                                            ),
-                                            child: const Text(
-                                              'فعال کردن',
-                                              style: TextStyle(
-                                                fontFamily: 'SM',
-                                              ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
                                             ),
                                           ),
-                                    const SizedBox(
-                                      width: 8,
-                                    ), // Spacing between buttons
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.delete,
-                                        color: Colors.red,
-                                      ),
-                                      onPressed: () => _deleteSubscription(
-                                        sub['id'].toString(),
-                                      ),
+                                          child: const Text(
+                                            'فعال کردن',
+                                            style: TextStyle(fontFamily: 'SM'),
+                                          ),
+                                        ),
+                                  const SizedBox(
+                                    width: 8,
+                                  ), // Spacing between buttons
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      color: Colors.red,
                                     ),
-                                  ],
-                                ),
+                                    onPressed: () => _deleteSubscription(
+                                      sub['id'].toString(),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            );
-                          },
-                        ),
-                ),
-              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
             ),
-          );
+          ],
+        ),
+      );
+    }
   }
 }

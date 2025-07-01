@@ -7,19 +7,22 @@ class CustomSnackbar {
   static void show({
     required BuildContext context,
     required String message,
-    Color backgroundColor = Colors.grey,
+    Color backgroundColor = Colors.grey, // Default can be adjusted
     IconData icon = Icons.info_outline,
     Duration duration = const Duration(seconds: 3),
   }) {
-    // Remove any existing snackbar first
     _currentOverlayEntry?.remove();
     _currentOverlayEntry = null;
 
+    // Determine appropriate text/icon color based on background
+    final Color foregroundColor =
+        ThemeData.estimateBrightnessForColor(backgroundColor) == Brightness.dark
+        ? Colors.white
+        : Colors.black; // Or specific theme colors
+
     _currentOverlayEntry = OverlayEntry(
       builder: (context) => Positioned(
-        top:
-            MediaQuery.of(context).padding.top +
-            10, // Position at the top, below status bar
+        top: MediaQuery.of(context).padding.top + 10,
         left: 10,
         right: 10,
         child: _CustomSnackbarWidget(
@@ -27,6 +30,7 @@ class CustomSnackbar {
           backgroundColor: backgroundColor,
           icon: icon,
           duration: duration,
+          foregroundColor: foregroundColor, // Pass foreground color
           onDismiss: () {
             if (_currentOverlayEntry != null) {
               _currentOverlayEntry!.remove();
@@ -46,6 +50,7 @@ class _CustomSnackbarWidget extends StatefulWidget {
   final Color backgroundColor;
   final IconData icon;
   final Duration duration;
+  final Color foregroundColor; // New property
   final VoidCallback onDismiss;
 
   const _CustomSnackbarWidget({
@@ -53,6 +58,7 @@ class _CustomSnackbarWidget extends StatefulWidget {
     required this.backgroundColor,
     required this.icon,
     required this.duration,
+    required this.foregroundColor, // Required
     required this.onDismiss,
   });
 
@@ -73,12 +79,11 @@ class _CustomSnackbarWidgetState extends State<_CustomSnackbarWidget>
       duration: const Duration(milliseconds: 300),
     );
     _offsetAnimation = Tween<Offset>(
-      begin: const Offset(-1.0, 0.0), // Starts from left
+      begin: const Offset(0.0, -1.5),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
     _controller.forward();
-
     Future.delayed(widget.duration, () {
       if (mounted) {
         _controller.reverse().then((_) {
@@ -117,20 +122,27 @@ class _CustomSnackbarWidgetState extends State<_CustomSnackbarWidget>
           ),
           child: Row(
             children: [
-              Icon(widget.icon, color: Colors.white),
+              Icon(
+                widget.icon,
+                color: widget.foregroundColor,
+              ), // Use foregroundColor
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   widget.message,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: widget.foregroundColor, // Use foregroundColor
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
+                    fontFamily: 'SM', // Ensure custom font is used
                   ),
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
+                icon: Icon(
+                  Icons.close,
+                  color: widget.foregroundColor,
+                ), // Use foregroundColor
                 onPressed: () {
                   _controller.reverse().then((_) {
                     widget.onDismiss();

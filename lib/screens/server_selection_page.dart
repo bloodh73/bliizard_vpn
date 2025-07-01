@@ -1,3 +1,4 @@
+import 'package:blizzard_vpn/components/custom_color.dart';
 import 'package:flutter/material.dart';
 import 'package:blizzard_vpn/models/app_state.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart'; // این ایمپورت همچنان برای V2RayURL لازم است
@@ -145,7 +146,19 @@ class _ServerSelectionPageState extends State<ServerSelectionPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Select Server'),
+        leading: GestureDetector(
+          onTap: () {
+            Navigator.of(context).pop();
+          },
+          child: Icon(Icons.arrow_back_ios, color: Colors.white),
+        ),
+        elevation: 0,
+        surfaceTintColor: CustomColor.primery, // Using CustomColor
+        backgroundColor: CustomColor.primery, // Using CustomColor
+        title: const Text(
+          'انتخاب سرور',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
         actions: [
           IconButton(
             icon: Icon(Icons.refresh),
