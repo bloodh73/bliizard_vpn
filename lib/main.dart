@@ -1,8 +1,9 @@
+// main.dart
 import 'package:blizzard_vpn/screens/admin_page.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:blizzard_vpn/screens/home_page.dart';
 import 'package:blizzard_vpn/screens/login_page.dart';
 import 'package:blizzard_vpn/screens/server_selection_page.dart';
@@ -25,98 +26,135 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('fa', 'IR'), // فارسی
+      ],
+      locale: const Locale('fa', 'IR'),
       debugShowCheckedModeBanner: false,
-      title: 'V2Ray Client',
+      title: 'Blizzard VPN',
       theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.dark(
-          primary: const Color.fromARGB(
-            166,
-            95,
-            93,
-            96,
-          ), // Deep purple for primary actions/branding
+        fontFamily: 'SM', // استفاده از فونت سفارشی
+        brightness: Brightness.light,
+        // تعریف ColorScheme جدید
+        colorScheme: ColorScheme.light(
+          primary: const Color(0xFF007BFF), // یک آبی جذاب برای Primary
           onPrimary: Colors.white,
           secondary: const Color(
             0xFF03DAC6,
-          ), // Teal for accents and secondary actions
+          ), // یک فیروزه‌ای روشن برای Secondary
           onSecondary: Colors.black,
-          error: Colors.redAccent, // For error states
+          surface: Colors.white, // رنگ پس‌زمینه کارت‌ها و سطوح
+          onSurface: Colors.black87,
+          background: const Color(0xFFF0F2F5), // رنگ پس‌زمینه کلی برنامه
+          onBackground: Colors.black87,
+          error: Colors.redAccent,
           onError: Colors.white,
-          background: const Color(0xFF121212), // Dark background
-          onBackground: Colors.white,
-          surface: const Color(
-            0xFF1E1E1E,
-          ), // Slightly lighter surface for cards, dialogs
-          onSurface: Colors.white,
+          // اضافه کردن رنگ‌های اضافی برای وضعیت‌ها
+          tertiary: const Color(0xFF28A745), // رنگ سبز برای موفقیت
+          onTertiary: Colors.white,
+          tertiaryContainer: const Color(0xFFFFC107), // رنگ زرد برای هشدار
+          onTertiaryContainer: Colors.black,
         ),
-        scaffoldBackgroundColor: Color(
-          0xFF121212,
-        ), // Consistent with background
-        appBarTheme: AppBarTheme(
-          backgroundColor: Color(0xFF1E1E1E), // AppBar matches surface
+        scaffoldBackgroundColor: const Color(
+          0xFFF0F2F5,
+        ), // رنگ پس‌زمینه Scaffold
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF007BFF),
           foregroundColor: Colors.white,
+          elevation: 0, // حذف سایه زیر AppBar
           centerTitle: true,
-          elevation: 0, // Flat app bar for modern look
+          titleTextStyle: TextStyle(
+            fontFamily: 'SM',
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-
+        cardTheme: CardThemeData(
+          elevation: 4, // افزایش سایه کارت‌ها
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16), // گوشه‌های گردتر
+          ),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          color: Colors.white, // رنگ پس‌زمینه کارت
+        ),
+        buttonTheme: ButtonThemeData(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          buttonColor: const Color(0xFF007BFF),
+          textTheme: ButtonTextTheme.primary,
+        ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(
-              0xFF6200EE,
-            ), // Primary color for elevated buttons
-            foregroundColor: Colors.white,
+            minimumSize: const Size(
+              double.infinity,
+              50,
+            ), // دکمه‌های با ارتفاع بیشتر و تمام عرض
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12), // Rounded buttons
+              borderRadius: BorderRadius.circular(12),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            backgroundColor: const Color(0xFF007BFF),
+            foregroundColor: Colors.white,
+            elevation: 5,
             textStyle: const TextStyle(
-              fontSize: 16,
+              fontFamily: 'SM',
+              fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
         ),
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
-            foregroundColor: const Color(
-              0xFF03DAC6,
-            ), // Secondary color for text buttons
-            textStyle: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
+            foregroundColor: const Color(0xFF007BFF),
+            textStyle: const TextStyle(fontFamily: 'SM', fontSize: 16),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none, // No border by default
-          ),
           filled: true,
-          fillColor: const Color(0xFF2C2C2C), // Fill color for input fields
-          labelStyle: TextStyle(color: Colors.grey[400]),
-          hintStyle: TextStyle(color: Colors.grey[600]),
+          fillColor: Colors.white,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 20,
-            vertical: 16,
+            vertical: 15,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none, // حذف BorderSide پیش‌فرض
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey[700]!, width: 1),
+            borderSide: const BorderSide(
+              color: Color(
+                0xFFE0E0E0,
+              ), // یک رنگ خاکستری روشن برای border غیرفعال
+              width: 1,
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-              color: Theme.of(context).colorScheme.primary,
+            borderSide: const BorderSide(
+              color: Color(0xFF007BFF), // رنگ Primary برای border فعال
               width: 2,
             ),
           ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.red, width: 2),
+          ),
+          labelStyle: TextStyle(fontFamily: 'SM', color: Colors.grey[700]),
+          hintStyle: TextStyle(fontFamily: 'SM', color: Colors.grey[500]),
         ),
-        // Add more specific themes for other widgets as needed
         listTileTheme: ListTileThemeData(
-          iconColor: Colors.white70,
-          textColor: Colors.white,
+          iconColor: const Color(0xFF007BFF), // آیکون‌ها به رنگ Primary
+          textColor: Colors.black87,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 8,
@@ -127,10 +165,24 @@ class MyApp extends StatelessWidget {
         ),
         snackBarTheme: SnackBarThemeData(
           backgroundColor: Colors.grey[800],
-          contentTextStyle: const TextStyle(color: Colors.white),
+          contentTextStyle: const TextStyle(
+            color: Colors.white,
+            fontFamily: 'SM',
+          ),
           actionTextColor: const Color(0xFF03DAC6),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           behavior: SnackBarBehavior.floating,
+        ),
+        bottomNavigationBarTheme: BottomNavigationBarThemeData(
+          backgroundColor: Colors.white,
+          selectedItemColor: const Color(0xFF007BFF),
+          unselectedItemColor: Colors.grey[600],
+          selectedLabelStyle: const TextStyle(
+            fontFamily: 'SM',
+            fontWeight: FontWeight.bold,
+          ),
+          unselectedLabelStyle: const TextStyle(fontFamily: 'SM'),
+          elevation: 8,
         ),
       ),
       initialRoute: '/',

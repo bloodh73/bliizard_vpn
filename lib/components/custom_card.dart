@@ -36,13 +36,23 @@ class CustomCard extends StatelessWidget {
             colors: isErrorState
                 ? [Colors.red[800]!, Colors.red[600]!]
                 : [
-                    const Color.fromARGB(255, 242, 235, 235),
-                    const Color.fromARGB(255, 255, 255, 255),
+                    const Color.fromARGB(
+                      255,
+                      255,
+                      255,
+                      255,
+                    ), // Lighter shade of white
+                    const Color.fromARGB(
+                      255,
+                      240,
+                      240,
+                      240,
+                    ), // Slightly darker shade of white
                   ],
           ),
           borderRadius: borderRadius ?? BorderRadius.circular(16),
         ),
-        padding: padding ?? const EdgeInsets.all(12),
+        padding: padding ?? const EdgeInsets.all(16),
         child: child,
       ),
     );

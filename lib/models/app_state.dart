@@ -1,5 +1,6 @@
 // در فایل app_state.dart
 import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'package:flutter_v2ray/url/url.dart'; // اضافه شده برای دسترسی به V2RayURL
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;

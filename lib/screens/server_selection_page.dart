@@ -64,7 +64,7 @@ class _ServerSelectionPageState extends State<ServerSelectionPage> {
       debugPrint('Ping timeout for ${server.remark}');
       return null; // Indicates unresponsiveness or timeout
     } on SocketException catch (e) {
-      debugPrint('Socket error for ${server.remark}: ${e.message}');
+      debugPrint('Socket error for ${server.remark.toString()}: ${e.message}');
       return null; // Indicates inability to connect (e.g., host not found, port closed)
     } catch (e) {
       debugPrint('Unexpected error during ping for ${server.remark}: $e');

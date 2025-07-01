@@ -236,6 +236,158 @@ class _AdminPageState extends State<AdminPage>
     }
   }
 
+  // New function to delete a subscription
+  Future<void> _deleteSubscription(String id) async {
+    try {
+      await supabase.from('subscription_links').delete().eq('id', id);
+      await _loadData();
+      if (mounted) {
+        CustomSnackbar.show(
+          context: context,
+          message: 'Subscription deleted successfully!',
+          backgroundColor: Colors.green,
+          icon: Icons.check_circle,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomSnackbar.show(
+          context: context,
+          message: 'Error deleting subscription: ${e.toString()}',
+          backgroundColor: Colors.redAccent,
+          icon: Icons.error,
+        );
+      }
+    }
+  }
+
+  void _showEditUserDialog(Map<String, dynamic> user) {
+    final TextEditingController emailController = TextEditingController(
+      text: user['email'],
+    );
+    final TextEditingController fullNameController = TextEditingController(
+      text: user['full_name'],
+    );
+    final TextEditingController dataLimitController = TextEditingController(
+      text: ((user['data_limit'] ?? 0) / (1024 * 1024 * 1024)).toStringAsFixed(
+        2,
+      ),
+    ); // Convert bytes to GB
+    final TextEditingController expiryDateController = TextEditingController(
+      text: date_utils.formatToJalali(user['expiry_date']),
+    );
+    bool isAdmin = user['is_admin'] ?? false;
+    String subscriptionType = user['subscription_type'] ?? 'free';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('ویرایش کاربر'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: emailController,
+                  decoration: const InputDecoration(labelText: 'ایمیل'),
+                ),
+                TextField(
+                  controller: fullNameController,
+                  decoration: const InputDecoration(labelText: 'نام'),
+                ),
+                TextField(
+                  controller: dataLimitController,
+                  decoration: const InputDecoration(
+                    labelText: 'حجم (GB)',
+                  ), // Label in GB
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: expiryDateController,
+                  decoration: const InputDecoration(labelText: 'تاریخ انقضا'),
+                  onTap: () async {
+                    DateTime? pickedDate = await showDatePicker(
+                      context: context,
+                      initialDate:
+                          DateTime.tryParse(user['expiry_date'] ?? '') ??
+                          DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime(2101),
+                    );
+                    if (pickedDate != null) {
+                      expiryDateController.text = pickedDate.toIso8601String();
+                    }
+                  },
+                ),
+                DropdownButtonFormField<String>(
+                  value: subscriptionType,
+                  decoration: const InputDecoration(
+                    labelText: 'Subscription Type',
+                  ),
+                  items: <String>['free', 'premium', 'vip']
+                      .map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      })
+                      .toList(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      subscriptionType = newValue;
+                    }
+                  },
+                ),
+                Row(
+                  children: [
+                    const Text('ادمین:'),
+                    Checkbox(
+                      value: isAdmin,
+                      onChanged: (bool? value) {
+                        if (value != null) {
+                          isAdmin = value;
+                          (context as Element)
+                              .markNeedsBuild(); // To update checkbox state
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('انصراف'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final int? dataLimitBytes =
+                    (double.tryParse(dataLimitController.text) != null
+                            ? double.parse(dataLimitController.text) *
+                                  (1024 * 1024 * 1024)
+                            : null)
+                        ?.toInt(); // Convert GB to bytes
+                _updateUser(user['id'], {
+                  'email': emailController.text,
+                  'full_name': fullNameController.text,
+                  'data_limit': dataLimitBytes,
+                  'expiry_date': expiryDateController.text,
+                  'is_admin': isAdmin,
+                  'subscription_type': subscriptionType,
+                });
+                Navigator.pop(context);
+              },
+              child: const Text('ذخیره'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -253,11 +405,12 @@ class _AdminPageState extends State<AdminPage>
           controller: _tabController,
           onTap: (index) => setState(() => _currentTabIndex = index),
           indicatorColor: Theme.of(context).colorScheme.secondary,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.grey[400],
+          labelColor: Colors.black,
+          unselectedLabelColor: Colors.black,
+          labelStyle: TextStyle(fontFamily: 'SM'),
           tabs: const [
-            Tab(text: 'Users'),
-            Tab(text: 'Subscriptions'),
+            Tab(text: 'یورز ها'),
+            Tab(text: 'کانفیگ ها'),
           ],
         ),
       ),
@@ -307,93 +460,59 @@ class _AdminPageState extends State<AdminPage>
                   user['data_limit'] != null &&
                   user['data_usage'] != null &&
                   user['data_usage'] >= user['data_limit'];
-
               return Card(
                 margin: const EdgeInsets.only(bottom: 16),
-                color: Theme.of(context).colorScheme.surface,
+                elevation: 2,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              user['full_name'] ?? 'Unknown User',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                                color: Colors.white,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (user['is_admin'] == true)
-                            Chip(
-                              label: const Text('Admin'),
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.secondary.withOpacity(0.2),
-                              labelStyle: TextStyle(
-                                color: Theme.of(context).colorScheme.secondary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
                       Text(
-                        user['email'] ?? 'No Email',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-                      ),
-                      const Divider(height: 20, thickness: 0.5),
-                      _buildUserInfoRow(
-                        icon: Icons.calendar_today,
-                        label: 'Expiry Date:',
-                        value: user['expiry_date'] != null
-                            ? date_utils.formatToJalali(user['expiry_date'])
-                            : 'Not Set',
-                        valueColor: isExpired ? Colors.red : Colors.green,
+                        user['full_name'] ?? 'N/A',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      _buildUserInfoRow(
-                        icon: Icons.data_usage,
-                        label: 'Data Usage:',
-                        value:
-                            '${user['data_usage'] ?? 0} / ${user['data_limit'] ?? 0} MB',
-                        valueColor: isDataExhausted ? Colors.red : Colors.green,
+                      Text('Email: ${user['email'] ?? 'N/A'}'),
+                      Text('Admin: ${user['is_admin'] == true ? 'Yes' : 'No'}'),
+                      Text(
+                        'Subscription Type: ${user['subscription_type'] ?? 'N/A'}',
                       ),
-                      const SizedBox(height: 8),
-                      _buildUserInfoRow(
-                        icon: Icons.vpn_lock,
-                        label: 'Subscription Type:',
-                        value:
-                            (user['subscription_type'] as String?)
-                                ?.toUpperCase() ??
-                            'N/A',
-                        valueColor: Colors.blueAccent,
+                      Text(
+                        'Expiry Date: ${date_utils.formatToJalali(user['expiry_date'])}',
                       ),
-                      const SizedBox(height: 10),
+                      Text(
+                        'Data Usage: ${((user['data_usage'] ?? 0) / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB / ${((user['data_limit'] ?? 0) / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB',
+                      ), // Display in GB
+                      if (isExpired)
+                        const Text(
+                          'Subscription Expired',
+                          style: TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      if (isDataExhausted)
+                        const Text(
+                          'Data Exhausted',
+                          style: TextStyle(
+                            color: Colors.orange,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       Align(
                         alignment: Alignment.bottomRight,
-                        child: TextButton.icon(
+                        child: ElevatedButton(
                           onPressed: () => _showEditUserDialog(user),
-                          icon: Icon(
-                            Icons.edit,
-                            color: Theme.of(context).colorScheme.secondary,
-                          ),
-                          label: Text(
-                            'Edit',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.secondary,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          child: const Text(
+                            'ویرایش',
+                            style: TextStyle(fontFamily: 'SM'),
                           ),
                         ),
                       ),
@@ -403,258 +522,6 @@ class _AdminPageState extends State<AdminPage>
               );
             },
           );
-  }
-
-  Widget _buildUserInfoRow({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color valueColor,
-  }) {
-    return Row(
-      children: [
-        Icon(icon, color: Colors.white70, size: 20),
-        const SizedBox(width: 10),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 15, color: Colors.white70),
-        ),
-        const Spacer(),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-            color: valueColor,
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showEditUserDialog(Map<String, dynamic> user) {
-    final TextEditingController emailController = TextEditingController(
-      text: user['email'],
-    );
-    final TextEditingController fullNameController = TextEditingController(
-      text: user['full_name'],
-    );
-    final TextEditingController dataLimitController = TextEditingController(
-      text: user['data_limit']?.toString() ?? '',
-    );
-    // Initialize daysTillExpiry from expiry_date
-    final TextEditingController daysTillExpiryController =
-        TextEditingController();
-    if (user['expiry_date'] != null) {
-      final expiryDateTime = DateTime.parse(user['expiry_date']);
-      final now = DateTime.now();
-      final difference = expiryDateTime.difference(now);
-      daysTillExpiryController.text = difference.inDays.toString();
-    }
-
-    final List<String> validSubscriptionTypes = [
-      'free',
-      'premium',
-      'multi_user',
-    ];
-    String? initialSubscriptionType = (user['subscription_type'] as String?)
-        ?.trim()
-        .toLowerCase();
-    String? selectedSubscriptionType =
-        validSubscriptionTypes.contains(initialSubscriptionType)
-        ? initialSubscriptionType
-        : null;
-
-    bool isAdmin = user['is_admin'] ?? false;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
-          title: Text(
-            'Edit User: ${user['full_name'] ?? user['email']}',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setInnerState) {
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: emailController,
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(
-                          Icons.email,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    const SizedBox(height: 15),
-                    TextField(
-                      controller: fullNameController,
-                      decoration: InputDecoration(
-                        labelText: 'Full Name',
-                        prefixIcon: Icon(
-                          Icons.person,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    const SizedBox(height: 15),
-                    TextField(
-                      controller: dataLimitController,
-                      decoration: InputDecoration(
-                        labelText: 'Data Limit (MB)',
-                        prefixIcon: Icon(
-                          Icons.data_usage,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      keyboardType: TextInputType.number,
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    const SizedBox(height: 15),
-                    TextField(
-                      controller: daysTillExpiryController,
-                      decoration: InputDecoration(
-                        labelText: 'Subscription Expiry in Days (from now)',
-                        hintText: 'e.g., 30 for 30 days',
-                        prefixIcon: Icon(
-                          Icons.calendar_today,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      keyboardType: TextInputType.number,
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    const SizedBox(height: 15),
-                    DropdownButtonFormField<String>(
-                      value: selectedSubscriptionType,
-                      decoration: InputDecoration(
-                        labelText: 'Subscription Type',
-                        prefixIcon: Icon(
-                          Icons.vpn_lock,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      dropdownColor: Theme.of(context).colorScheme.surface,
-                      style: TextStyle(color: Colors.white),
-                      items: validSubscriptionTypes
-                          .map<DropdownMenuItem<String>>((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(
-                                value.toUpperCase(),
-                                style: TextStyle(color: Colors.white),
-                              ),
-                            );
-                          })
-                          .toList(),
-                      onChanged: (String? newValue) {
-                        setInnerState(() {
-                          selectedSubscriptionType = newValue;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 15),
-                    CheckboxListTile(
-                      title: Text(
-                        'Is Admin',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      value: isAdmin,
-                      onChanged: (bool? value) {
-                        setInnerState(() {
-                          isAdmin = value ?? false;
-                        });
-                      },
-                      activeColor: Theme.of(context).colorScheme.secondary,
-                      checkColor: Colors.white,
-                      tileColor: Theme.of(context).colorScheme.background,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: Text(
-                'Cancel',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-              ),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text('Save'),
-              onPressed: () async {
-                Navigator.of(context).pop();
-
-                // Calculate new expiry date based on days entered
-                DateTime? newExpiryDate;
-                if (daysTillExpiryController.text.isNotEmpty) {
-                  final days = int.tryParse(daysTillExpiryController.text);
-                  if (days != null) {
-                    newExpiryDate = DateTime.now().add(Duration(days: days));
-                  }
-                }
-
-                await _updateUser(user['id'], {
-                  'email': emailController.text.trim(),
-                  'full_name': fullNameController.text.trim(),
-                  'data_limit': int.tryParse(dataLimitController.text),
-                  'subscription_type': selectedSubscriptionType,
-                  'is_admin': isAdmin,
-                  'expiry_date': newExpiryDate
-                      ?.toIso8601String(), // Save as ISO 8601 string
-                });
-              },
-            ),
-          ],
-        );
-      },
-    );
   }
 
   Widget _buildSubscriptionsTab() {
@@ -671,26 +538,15 @@ class _AdminPageState extends State<AdminPage>
                       Expanded(
                         child: TextField(
                           controller: _urlController,
-                          decoration: InputDecoration(
+                          decoration: const InputDecoration(
                             labelText: 'New Subscription URL',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            suffixIcon: _isLoading
-                                ? const Padding(
-                                    padding: EdgeInsets.all(8.0),
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : null,
+                            border: OutlineInputBorder(),
                           ),
-                          enabled: !_isLoading,
                         ),
                       ),
                       const SizedBox(width: 10),
                       ElevatedButton(
-                        onPressed: _isLoading ? null : _addSubscription,
+                        onPressed: _addSubscription,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Theme.of(
                             context,
@@ -699,12 +555,8 @@ class _AdminPageState extends State<AdminPage>
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 16,
-                            horizontal: 20,
-                          ),
                         ),
-                        child: const Text('Add & Activate'),
+                        child: const Text('اضافه کردن'),
                       ),
                     ],
                   ),
@@ -732,84 +584,66 @@ class _AdminPageState extends State<AdminPage>
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.all(16),
                           itemCount: _subscriptions.length,
                           itemBuilder: (context, index) {
                             final sub = _subscriptions[index];
                             final isActive = sub['is_active'] == true;
                             return Card(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              color: Theme.of(context).colorScheme.surface,
+                              margin: const EdgeInsets.only(bottom: 16),
+                              elevation: 2,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(
-                                  color: isActive
-                                      ? Theme.of(context).colorScheme.secondary
-                                      : Colors.transparent,
-                                  width: 2,
-                                ),
                               ),
                               child: ListTile(
-                                contentPadding: const EdgeInsets.all(16),
-                                title: Text(
-                                  'Subscription ID: ${sub['id']}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: Colors.white,
-                                  ),
+                                title: Text(sub['url'] ?? 'N/A'),
+                                subtitle: Text(
+                                  'Created: ${date_utils.formatToJalali(sub['created_at'])}',
                                 ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Added: ${date_utils.formatToJalali(sub['created_at'])}',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: Colors.grey[400],
+                                    isActive
+                                        ? Icon(
+                                            Icons.check_circle_sharp,
+                                            color: Colors.green,
+                                          )
+                                        : ElevatedButton(
+                                            onPressed: () =>
+                                                _activateSubscription(
+                                                  sub['id'].toString(),
+                                                ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                              foregroundColor: Colors.white,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                            ),
+                                            child: const Text(
+                                              'فعال کردن',
+                                              style: TextStyle(
+                                                fontFamily: 'SM',
+                                              ),
+                                            ),
+                                          ),
+                                    const SizedBox(
+                                      width: 8,
+                                    ), // Spacing between buttons
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete,
+                                        color: Colors.red,
                                       ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      sub['url'] ?? 'N/A',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                        color: isActive
-                                            ? Colors.white
-                                            : Colors.white70,
+                                      onPressed: () => _deleteSubscription(
+                                        sub['id'].toString(),
                                       ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),
-                                trailing: isActive
-                                    ? const Text(
-                                        'Active',
-                                        style: TextStyle(
-                                          color: Colors.green,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      )
-                                    : ElevatedButton(
-                                        onPressed: () => _activateSubscription(
-                                          sub['id'].toString(),
-                                        ),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Theme.of(
-                                            context,
-                                          ).colorScheme.primary,
-                                          foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              8,
-                                            ),
-                                          ),
-                                        ),
-                                        child: const Text('Activate'),
-                                      ),
                               ),
                             );
                           },

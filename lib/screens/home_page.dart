@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:blizzard_vpn/components/custom_card.dart';
 import 'package:blizzard_vpn/components/custom_snackbar.dart';
-
 import '../utils/date_utils.dart' as date_utils;
 import 'package:blizzard_vpn/models/app_state.dart';
 import 'package:flutter/material.dart';
@@ -40,12 +39,29 @@ class _HomePageState extends State<HomePage> {
   bool isConnecting = false;
   bool isRefreshing = false;
   String? coreVersion;
+  String remark = "Default Remark";
+
+  final config = TextEditingController();
+  bool proxyOnly = false;
+  final bypassSubnetController = TextEditingController();
+  List<String> bypassSubnets = [];
 
   @override
   void initState() {
     super.initState();
+
     _initializeApp();
     _checkUserStatus();
+    flutterV2ray
+        .initializeV2Ray(
+          notificationIconResourceType: "mipmap",
+          notificationIconResourceName: "ic_launcher",
+        )
+        .then((value) async {
+          coreVersion = await flutterV2ray.getCoreVersion();
+          setState(() {});
+        });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       refreshServers();
     });
@@ -63,6 +79,56 @@ class _HomePageState extends State<HomePage> {
     await _initializeV2Ray();
     await _loadUserProfile();
     await AppState.instance.fetchAndParseServers(); // فراخوانی از AppState
+  }
+
+  Future<void> _handleConnectDisconnect() async {
+    final appState = AppState.instance;
+    if (appState.selectedServer == null) {
+      _showErrorSnackbar('Please select a server first.');
+      return;
+    }
+
+    setState(() => isConnecting = true);
+    try {
+      if (v2rayStatus.value.state == "CONNECTED") {
+        await flutterV2ray.stopV2Ray();
+      } else {
+        if (v2rayStatus.value.state != "CONNECTING") {
+          // Explicitly request permission before starting V2Ray
+          if (await flutterV2ray.requestPermission()) {
+            //
+            await flutterV2ray.startV2Ray(
+              config: appState.selectedServer!.getFullConfiguration(),
+              remark: appState.selectedServer!.remark,
+            );
+          } else {
+            _showErrorSnackbar('Permission denied. Cannot connect to VPN.'); //
+          }
+        }
+      }
+    } catch (e) {
+      _showErrorSnackbar('Connection error: $e');
+    } finally {
+      setState(() => isConnecting = false);
+    }
+  }
+
+  void connect() async {
+    if (await flutterV2ray.requestPermission()) {
+      // Permission request happens here
+      flutterV2ray.startV2Ray(
+        remark: remark,
+
+        notificationDisconnectButtonName: "DISCONNECT",
+        config: '',
+      );
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Permission Denied')));
+      }
+    }
   }
 
   Future<void> _initializeV2Ray() async {
@@ -298,33 +364,42 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _handleConnectDisconnect() async {
-    final appState = AppState.instance;
-    if (appState.selectedServer == null) {
-      _showErrorSnackbar('Please select a server first.');
-      return;
-    }
-
-    setState(() => isConnecting = true);
-    try {
-      // اصلاح: بررسی وضعیت V2Ray بر اساس رشته "CONNECTED"
-      if (v2rayStatus.value.state == "CONNECTED") {
-        await flutterV2ray.stopV2Ray();
-      } else {
-        // همچنین، مطمئن شوید که قبلاً متصل نبوده است تا از اتصال مجدد جلوگیری شود
-        if (v2rayStatus.value.state != "CONNECTING") {
-          // اضافه کردن این شرط برای جلوگیری از تلاش برای اتصال مجدد
-          await flutterV2ray.startV2Ray(
-            config: appState.selectedServer!.getFullConfiguration(),
-            remark: '',
-          );
-        }
-      }
-    } catch (e) {
-      _showErrorSnackbar('Connection error: $e');
-    } finally {
-      setState(() => isConnecting = false);
-    }
+  void bypassSubnet() {
+    bypassSubnetController.text = bypassSubnets.join("\n");
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Subnets:', style: TextStyle(fontSize: 16)),
+              const SizedBox(height: 5),
+              TextFormField(
+                controller: bypassSubnetController,
+                maxLines: 5,
+                minLines: 5,
+              ),
+              const SizedBox(height: 5),
+              ElevatedButton(
+                onPressed: () {
+                  bypassSubnets = bypassSubnetController.text.trim().split(
+                    '\n',
+                  );
+                  if (bypassSubnets.first.isEmpty) {
+                    bypassSubnets = [];
+                  }
+                  Navigator.of(context).pop();
+                },
+                child: const Text('Submit'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -373,14 +448,14 @@ class _HomePageState extends State<HomePage> {
           children: [
             UserAccountsDrawerHeader(
               accountName: Text(
-                userProfile?['full_name'] ?? 'Guest',
+                userProfile?['full_name'] ?? 'مهمان',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               accountEmail: Text(
-                supabase.auth.currentUser?.email ?? 'No email',
+                supabase.auth.currentUser?.email ?? 'ایمیل موجود نیست',
                 style: const TextStyle(fontSize: 14),
               ),
               currentAccountPicture: CircleAvatar(
@@ -418,7 +493,7 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   _buildDrawerItem(
                     icon: Icons.calendar_today,
-                    title: 'Expiry Date',
+                    title: 'تاریخ انقضا',
                     value: userProfile?['expiry_date'] != null
                         ? date_utils.formatToJalali(userProfile!['expiry_date'])
                         : 'Not Set',
@@ -426,7 +501,7 @@ class _HomePageState extends State<HomePage> {
                   _buildDrawerDivider(),
                   _buildDrawerItem(
                     icon: Icons.data_usage,
-                    title: 'Data Usage',
+                    title: 'حجم مصرفی',
                     value: userProfile?['data_usage'] != null
                         ? '${_formatBytes(userProfile!['data_usage'])} / ${_formatBytes(userProfile!['data_limit'] ?? 0)}'
                         : '0 / 0 B',
@@ -448,8 +523,8 @@ class _HomePageState extends State<HomePage> {
                         color: Theme.of(context).colorScheme.secondary,
                       ),
                       title: const Text(
-                        'Admin Panel',
-                        style: TextStyle(color: Colors.white),
+                        'پنل ادمین',
+                        style: TextStyle(color: Colors.white, fontFamily: 'SM'),
                       ),
                       onTap: () {
                         Navigator.pop(context); // Close drawer
@@ -460,7 +535,9 @@ class _HomePageState extends State<HomePage> {
                   _buildDrawerDivider(),
                   _buildDrawerItem(
                     icon: Icons.account_circle,
+
                     title: 'Account Type',
+
                     value:
                         userProfile?['subscription_type']
                             ?.toString()
@@ -471,8 +548,8 @@ class _HomePageState extends State<HomePage> {
                   ListTile(
                     leading: const Icon(Icons.settings, color: Colors.white),
                     title: const Text(
-                      'Settings',
-                      style: TextStyle(color: Colors.white),
+                      'تنظیمات',
+                      style: TextStyle(color: Colors.white, fontFamily: 'SM'),
                     ),
                     onTap: () {
                       // Navigate to settings page
@@ -482,8 +559,8 @@ class _HomePageState extends State<HomePage> {
                   ListTile(
                     leading: const Icon(Icons.logout, color: Colors.white),
                     title: const Text(
-                      'Logout',
-                      style: TextStyle(color: Colors.white),
+                      'خروج از حساب',
+                      style: TextStyle(color: Colors.white, fontFamily: 'SM'),
                     ),
                     onTap: _handleLogout,
                   ),
@@ -561,7 +638,7 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Blizzard VPN'),
+        title: Text(userProfile?['full_name'] ?? 'Guest'),
         leading: Builder(
           builder: (context) => IconButton(
             icon: const Icon(Icons.menu),
@@ -572,7 +649,7 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: Icon(
               Icons.refresh,
-              color: isRefreshing ? Colors.grey : Colors.white,
+              color: isRefreshing ? Colors.grey : Colors.green,
             ),
             onPressed: isRefreshing ? null : refreshServers,
             tooltip: 'Refresh Servers',
@@ -584,7 +661,7 @@ class _HomePageState extends State<HomePage> {
                 context: context,
                 applicationName: 'Blizzard VPN',
                 applicationVersion: '1.0.0',
-                applicationLegalese: '© 2023 Blizzard VPN',
+                applicationLegalese: '© 2025 Blizzard VPN',
                 children: [
                   Text('Core Version: ${coreVersion ?? 'N/A'}'),
                   Text(
@@ -669,14 +746,15 @@ class _HomePageState extends State<HomePage> {
                               const SizedBox(height: 10),
                               Text(
                                 isSubscriptionExpired
-                                    ? 'EXPIRED'
+                                    ? 'اتمام تاریخ'
                                     : isDataExhausted
-                                    ? 'NO DATA'
+                                    ? 'تمام حجم'
                                     : buttonText,
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
+                                  fontFamily: 'GM',
                                 ),
                               ),
                             ],
@@ -686,7 +764,8 @@ class _HomePageState extends State<HomePage> {
                       const SizedBox(height: 20),
                       // نمایش وضعیت متنی
                       Text(
-                        'Status: ${status.state}', // نیازی به .toUpperCase() نیست چون خودش هست
+                        status
+                            .state, // نیازی به .toUpperCase() نیست چون خودش هست
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -724,9 +803,10 @@ class _HomePageState extends State<HomePage> {
                                       color: Colors.green,
                                     ),
                                     Text(
-                                      'Upload: ${status.uploadSpeed}',
+                                      'آپلود: ${status.uploadSpeed}',
                                       style: const TextStyle(
                                         color: Colors.green,
+                                        fontFamily: 'SM',
                                         fontSize: 20,
                                       ),
                                     ),
@@ -742,9 +822,10 @@ class _HomePageState extends State<HomePage> {
                                       color: Colors.red,
                                     ),
                                     Text(
-                                      'Download: ${status.downloadSpeed}',
+                                      'دانلود: ${status.downloadSpeed}',
                                       style: const TextStyle(
                                         color: Colors.red,
+                                        fontFamily: 'SM',
                                         fontSize: 20,
                                       ),
                                     ),
@@ -772,19 +853,20 @@ class _HomePageState extends State<HomePage> {
                       color: Colors.blueAccent,
                     ),
                     title: const Text(
-                      'Selected Server',
-                      style: TextStyle(color: Colors.black),
+                      'انتخاب سرور',
+                      style: TextStyle(color: Colors.black, fontFamily: 'SM'),
                     ),
                     subtitle: Text(
-                      AppState.instance.selectedServer?.remark ??
-                          'No Server Selected',
+                      AppState.instance.selectedServer?.remark.toString() ??
+                          'سرور موجود نیست',
 
-                      style: const TextStyle(
-                        color: Colors.black45,
-                        fontSize: 16,
-                      ),
+                      style: const TextStyle(color: Colors.black, fontSize: 15),
                     ),
-                    trailing: const Icon(Icons.chevron_right),
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios,
+                      size: 25,
+                      color: Colors.blue,
+                    ),
                     onTap: () async {
                       final result = await Navigator.pushNamed(
                         context,
@@ -805,24 +887,24 @@ class _HomePageState extends State<HomePage> {
                         color: Colors.blue,
                       ),
                       title: const Text(
-                        'Address',
-                        style: TextStyle(color: Colors.black),
+                        'آدرس',
+                        style: TextStyle(color: Colors.black, fontFamily: 'SM'),
                       ),
                       subtitle: Text(
                         appState.selectedServer!.address,
-                        style: TextStyle(color: Colors.black45),
+                        style: TextStyle(color: Colors.black),
                       ),
                     ),
                     const Divider(color: Colors.grey),
                     ListTile(
                       leading: const Icon(Icons.router, color: Colors.blue),
                       title: const Text(
-                        'Port',
-                        style: TextStyle(color: Colors.black),
+                        'پورت',
+                        style: TextStyle(color: Colors.black, fontFamily: 'SM'),
                       ),
                       subtitle: Text(
                         appState.selectedServer!.port.toString(),
-                        style: TextStyle(color: Colors.black45),
+                        style: TextStyle(color: Colors.black),
                       ),
                     ),
                   ],
@@ -835,7 +917,7 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 children: [
                   _buildStatusRow(
-                    'Subscription Link:',
+                    'لینک سابسکریپشن:',
                     appState.subscriptionLink != null &&
                             appState.subscriptionLink!.isNotEmpty
                         ? 'Loaded'
@@ -848,7 +930,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 8),
                   _buildStatusRow(
-                    'Profile Status:',
+                    'وضعیت پروفایل:',
                     isProfileLoading
                         ? 'Loading...'
                         : userProfile != null
