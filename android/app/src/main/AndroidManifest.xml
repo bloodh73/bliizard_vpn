@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <application
-        android:label="blizzard_vpn"
+        android:label="HKRay"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -474,10 +474,11 @@ class _HomePageState extends State<HomePage> {
                 backgroundColor: Colors.white.withOpacity(
                   0.2,
                 ), // Lighter circle avatar
-                child: Text(
-                  userProfile?['full_name']?.toUpperCase() ?? 'شما',
-                  style: const TextStyle(fontSize: 32, color: Colors.white),
-                ),
+                child: Icon(Icons.person, size: 35),
+                // child: Text(
+                //   userProfile?['full_name']?.toUpperCase() ?? 'شما',
+                //   style: const TextStyle(fontSize: 32, color: Colors.white),
+                // ),
               ),
               decoration: const BoxDecoration(color: Colors.transparent),
             ),
@@ -717,9 +718,9 @@ class _HomePageState extends State<HomePage> {
             onPressed: () {
               showAboutDialog(
                 context: context,
-                applicationName: 'Blizzard VPN',
+                applicationName: 'HKRay',
                 applicationVersion: '1.0.1',
-                applicationLegalese: '© 2025 Blizzard VPN',
+                applicationLegalese: '© 2025 HKRay',
                 children: [
                   Text('Core Version: ${coreVersion ?? 'N/A'}'),
                   Text(
@@ -873,9 +874,7 @@ class _HomePageState extends State<HomePage> {
                                     children: [
                                       Icon(
                                         Icons.arrow_upward,
-                                        color: Colors
-                                            .green
-                                            .shade700, // Deeper green
+                                        color: Colors.green, // Deeper green
                                         size: 28,
                                       ),
                                       const SizedBox(width: 8),
@@ -898,7 +897,7 @@ class _HomePageState extends State<HomePage> {
                                             style: const TextStyle(
                                               color: CustomColor.darkBackground,
                                               fontFamily: 'SM',
-                                              fontSize: 22,
+                                              fontSize: 18,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
@@ -920,8 +919,7 @@ class _HomePageState extends State<HomePage> {
                                     children: [
                                       Icon(
                                         Icons.arrow_downward,
-                                        color:
-                                            Colors.red.shade700, // Deeper red
+                                        color: Colors.orange, // Deeper red
                                         size: 28,
                                       ),
                                       const SizedBox(width: 8),
@@ -944,7 +942,7 @@ class _HomePageState extends State<HomePage> {
                                             style: const TextStyle(
                                               color: CustomColor.darkBackground,
                                               fontFamily: 'SM',
-                                              fontSize: 22,
+                                              fontSize: 18,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
