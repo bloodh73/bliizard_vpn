@@ -170,7 +170,7 @@ class _ServerSelectionPageState extends State<ServerSelectionPage> {
             onPressed: _isLoadingServers || _isPinging
                 ? null
                 : _sortServersByPing,
-            tooltip: 'Sort by Ping',
+            tooltip: 'مرتب سازی بر اساس پینگ',
           ),
         ],
       ),
@@ -182,7 +182,7 @@ class _ServerSelectionPageState extends State<ServerSelectionPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
-                    'No servers available. Please add subscription links.',
+                    'هیچ سروری در دسترس نیست. لطفاً لینک‌های اشتراک را اضافه کنید..',
                     style: TextStyle(color: Colors.white70, fontSize: 16),
                     textAlign: TextAlign.center,
                   ),
@@ -190,7 +190,7 @@ class _ServerSelectionPageState extends State<ServerSelectionPage> {
                   ElevatedButton.icon(
                     onPressed: _loadServers,
                     icon: const Icon(Icons.refresh),
-                    label: const Text('Reload Servers'),
+                    label: const Text('بارگذاری مجدد سرورها'),
                   ),
                 ],
               ),
@@ -210,7 +210,7 @@ class _ServerSelectionPageState extends State<ServerSelectionPage> {
                   pingStatusText = 'Pinging...'; // Still trying to ping
                   pingColor = Colors.yellow;
                 } else if (ping != null) {
-                  pingStatusText = 'Ping: ${ping}ms';
+                  pingStatusText = 'پینگ: ${ping}ms';
                   if (ping < 100) {
                     pingColor = Colors.green;
                   } else if (ping < 300) {
@@ -221,7 +221,7 @@ class _ServerSelectionPageState extends State<ServerSelectionPage> {
                 } else {
                   // ping is null and _isPinging is false, means ping attempt failed
                   pingStatusText =
-                      'Ping: Unreachable'; // Server is disconnected/unreachable
+                      'پینگ: غیرقابل دسترس'; // Server is disconnected/unreachable
                   pingColor = Colors.red;
                 }
 

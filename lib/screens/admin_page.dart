@@ -237,6 +237,164 @@ class _AdminPageState extends State<AdminPage>
     }
   }
 
+  Future<void> _addUser(Map<String, dynamic> newUser) async {
+    try {
+      await supabase.from('users').insert(newUser);
+      await _loadData();
+      if (mounted) {
+        CustomSnackbar.show(
+          context: context,
+          message: 'User added successfully!',
+          backgroundColor: Colors.green,
+          icon: Icons.check_circle,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        CustomSnackbar.show(
+          context: context,
+          message: 'Error adding user: ${e.toString()}',
+          backgroundColor: Colors.redAccent,
+          icon: Icons.error,
+        );
+      }
+    }
+  }
+
+  void _showAddUserDialog() {
+    final TextEditingController emailController = TextEditingController();
+    final TextEditingController fullNameController = TextEditingController();
+    final TextEditingController dataLimitController = TextEditingController();
+    final TextEditingController expiryDateController = TextEditingController();
+    bool isAdmin = false;
+    String subscriptionType = 'free';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('افزودن کاربر جدید'), // New title
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: emailController,
+                  decoration: const InputDecoration(labelText: 'ایمیل'),
+                ),
+                SizedBox(height: 15),
+                TextField(
+                  controller: fullNameController,
+                  decoration: const InputDecoration(labelText: 'نام'),
+                ),
+                SizedBox(height: 15),
+                TextField(
+                  controller: dataLimitController,
+                  decoration: const InputDecoration(labelText: 'حجم (GB)'),
+                  keyboardType: TextInputType.number,
+                ),
+                SizedBox(height: 15),
+                TextField(
+                  controller: expiryDateController,
+                  decoration: const InputDecoration(labelText: 'تاریخ انقضا'),
+                  onTap: () async {
+                    DateTime? pickedDate = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime(2101),
+                    );
+                    if (pickedDate != null) {
+                      expiryDateController.text = pickedDate.toIso8601String();
+                    }
+                  },
+                ),
+                SizedBox(height: 15),
+                DropdownButtonFormField<String>(
+                  value: subscriptionType,
+                  decoration: const InputDecoration(labelText: 'نوع اشتراک'),
+                  items: <String>['free', 'premium', 'vip']
+                      .map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      })
+                      .toList(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        // Use setState to update the dropdown value
+                        subscriptionType = newValue;
+                      });
+                    }
+                  },
+                ),
+                SizedBox(height: 15),
+                Row(
+                  children: [
+                    const Text('ادمین:'),
+                    Checkbox(
+                      value: isAdmin,
+                      onChanged: (bool? value) {
+                        if (value != null) {
+                          setState(() {
+                            // <--- Add setState here
+                            isAdmin = value;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('انصراف', style: TextStyle(color: Colors.red)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () {
+                final int? dataLimitBytes =
+                    (double.tryParse(dataLimitController.text) != null
+                            ? double.parse(dataLimitController.text) *
+                                  (1024 * 1024 * 1024)
+                            : null)
+                        ?.toInt();
+                _addUser({
+                  'email': emailController.text,
+                  'full_name': fullNameController.text,
+                  'data_limit': dataLimitBytes,
+                  'expiry_date': expiryDateController.text,
+                  'is_admin': isAdmin,
+                  'subscription_type': subscriptionType,
+                  'data_usage': 0, // Initialize data usage for new users
+                });
+                Navigator.pop(context);
+              },
+              child: const Text('افزودن'), // New text for add button
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // New function to delete a subscription
   Future<void> _deleteSubscription(String id) async {
     try {
@@ -451,13 +609,42 @@ class _AdminPageState extends State<AdminPage>
         controller: _tabController,
         children: [_buildUsersTab(), _buildSubscriptionsTab()],
       ),
+      floatingActionButton: _currentTabIndex == 0
+          ? FloatingActionButton(
+              onPressed: _showAddUserDialog,
+              backgroundColor: CustomColor.primery,
+              child: const Icon(Icons.person_add, color: Colors.white),
+            )
+          : null, // Only show on the users tab
     );
   }
 
   Widget _buildUsersTab() {
     return _isLoading
         ? const Center(child: CircularProgressIndicator())
-        : RefreshIndicator(onRefresh: _loadData, child: _buildUsersList());
+        : RefreshIndicator(
+            onRefresh: _loadData,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  // child: ElevatedButton.icon(
+                  //   onPressed: _showAddUserDialog,
+                  //   icon: const Icon(Icons.person_add),
+                  //   label: const Text('افزودن کاربر جدید'),
+                  //   style: ElevatedButton.styleFrom(
+                  //     backgroundColor: CustomColor.primery,
+                  //     foregroundColor: Colors.white,
+                  //     minimumSize: const Size.fromHeight(
+                  //       50,
+                  //     ), // Make button wider
+                  //   ),
+                  // ),
+                ),
+                Expanded(child: _buildUsersList()),
+              ],
+            ),
+          );
   }
 
   Widget _buildUsersList() {
@@ -477,7 +664,10 @@ class _AdminPageState extends State<AdminPage>
                   ),
                   onPressed: _loadData,
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh'),
+                  label: const Text(
+                    'Refresh',
+                    style: TextStyle(color: Colors.white),
+                  ),
                 ),
               ],
             ),
@@ -496,72 +686,115 @@ class _AdminPageState extends State<AdminPage>
                   user['data_limit'] != null &&
                   user['data_usage'] != null &&
                   user['data_usage'] >= user['data_limit'];
-              return Card(
-                margin: const EdgeInsets.only(bottom: 16),
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user['full_name'] ?? 'N/A',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text('Email: ${user['email'] ?? 'N/A'}'),
-                      Text('Admin: ${user['is_admin'] == true ? 'Yes' : 'No'}'),
-                      Text(
-                        'Subscription Type: ${user['subscription_type'] ?? 'N/A'}',
-                      ),
-                      Text(
-                        'Expiry Date: ${date_utils.formatToJalali(user['expiry_date'])}',
-                      ),
-                      Text(
-                        'Data Usage: ${((user['data_usage'] ?? 0) / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB / ${((user['data_limit'] ?? 0) / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB',
-                      ), // Display in GB
-                      if (isExpired)
-                        const Text(
-                          'Subscription Expired',
-                          style: TextStyle(
-                            color: Colors.red,
+              return Directionality(
+                textDirection: TextDirection.ltr,
+                child: Card(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user['full_name'] ?? 'N/A',
+                          style: const TextStyle(
                             fontWeight: FontWeight.bold,
+                            fontSize: 18,
                           ),
                         ),
-                      if (isDataExhausted)
-                        const Text(
-                          'Data Exhausted',
-                          style: TextStyle(
-                            color: Colors.orange,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(Icons.email, color: CustomColor.primery),
+                            SizedBox(width: 3),
+                            Text(
+                              'Email: ${user['email'] ?? 'N/A'}',
+                              style: TextStyle(color: CustomColor.primery),
+                            ),
+                          ],
                         ),
-                      Align(
-                        alignment: Alignment.bottomRight,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).colorScheme.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+
+                        Row(
+                          children: [
+                            Icon(Icons.alarm, color: Colors.pinkAccent),
+                            SizedBox(width: 3),
+                            Text(
+                              'Expiry Date: ${date_utils.formatToJalali(user['expiry_date'])}',
+                              style: TextStyle(color: Colors.pinkAccent),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            Icon(Icons.backup, color: Colors.purpleAccent),
+                            SizedBox(width: 3),
+                            Text(
+                              'Data Usage: ${((user['data_usage'] ?? 0) / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB / ${((user['data_limit'] ?? 0) / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB',
+                              style: TextStyle(color: Colors.purpleAccent),
+                            ),
+                          ],
+                        ), // Display in GB
+                        Row(
+                          children: [
+                            Icon(Icons.link, color: CustomColor.tertiary),
+                            SizedBox(width: 3),
+                            Text(
+                              'Subscription Type: ${user['subscription_type'] ?? 'N/A'}',
+                              style: TextStyle(color: Colors.amber),
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            Icon(Icons.person, color: CustomColor.secondary),
+                            SizedBox(width: 3),
+                            Text(
+                              'Admin: ${user['is_admin'] == true ? 'Yes' : 'No'}',
+                              style: TextStyle(color: CustomColor.secondary),
+                            ),
+                          ],
+                        ),
+                        if (isExpired)
+                          const Text(
+                            'Subscription Expired',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          onPressed: () => _showEditUserDialog(user),
-                          child: const Text(
-                            'ویرایش',
-                            style: TextStyle(fontFamily: 'SM'),
+                        if (isDataExhausted)
+                          const Text(
+                            'Data Exhausted',
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        Align(
+                          alignment: Alignment.bottomRight,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onPressed: () => _showEditUserDialog(user),
+                            child: const Text(
+                              'ویرایش',
+                              style: TextStyle(fontFamily: 'SM'),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );

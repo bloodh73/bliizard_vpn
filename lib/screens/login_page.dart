@@ -70,7 +70,7 @@ class _LoginPageState extends State<LoginPage> {
         });
       }
     } catch (e) {
-      debugPrint('Error loading remembered user: $e');
+      debugPrint('خطا در بارگیری کاربر به خاطر سپرده شده: $e');
     }
   }
 
@@ -108,7 +108,7 @@ class _LoginPageState extends State<LoginPage> {
         );
 
         if (response.user == null) {
-          throw AuthException('Sign up failed. Please try again.');
+          throw AuthException('ثبت نام ناموفق بود. لطفا دوباره امتحان کنید.');
         }
 
         await _createUserProfile(
@@ -120,7 +120,8 @@ class _LoginPageState extends State<LoginPage> {
         if (mounted) {
           CustomSnackbar.show(
             context: context,
-            message: 'Registration successful! Please verify your email.',
+            message:
+                'ثبت نام با موفقیت انجام شد! لطفا ایمیل خود را تایید کنید.',
             backgroundColor: Colors.green,
             icon: Icons.check_circle,
             duration: const Duration(seconds: 3),
@@ -135,12 +136,12 @@ class _LoginPageState extends State<LoginPage> {
         );
 
         if (response.user == null) {
-          throw const AuthException('Invalid email or password');
+          throw const AuthException('ایمیل یا رمز عبور نامعتبر است');
         }
 
         if (response.user?.emailConfirmedAt == null) {
           await _supabase.auth.signOut();
-          throw const AuthException('Please verify your email first');
+          throw const AuthException('طفا ابتدا ایمیل خود را تایید کنید');
         }
 
         if (mounted) {
@@ -148,16 +149,18 @@ class _LoginPageState extends State<LoginPage> {
         }
       }
     } on AuthException catch (e) {
-      setState(() => _errorMessage = _parseAuthError(e.message));
+      setState(
+        () => _errorMessage = _parseAuthError('کاربری با این ایمیل وجود ندارد'),
+      );
       CustomSnackbar.show(
         context: context,
-        message: _errorMessage,
+        message: 'کاربری با این ایمیل وجود ندارد',
         backgroundColor: Colors.redAccent,
         icon: Icons.error,
       );
     } catch (e) {
-      setState(() => _errorMessage = 'An unexpected error occurred');
-      debugPrint('Auth error: $e');
+      setState(() => _errorMessage = 'یک خطای غیرمنتظره رخ داد');
+      debugPrint('خطای احراز هویت: $e');
       CustomSnackbar.show(
         context: context,
         message: _errorMessage,
@@ -187,10 +190,10 @@ class _LoginPageState extends State<LoginPage> {
         'created_at': DateTime.now().toIso8601String(),
       });
     } catch (e) {
-      debugPrint('Profile creation error: $e');
+      debugPrint('خطای ایجاد نمایه: $e');
       CustomSnackbar.show(
         context: context,
-        message: 'Failed to create user profile: ${e.toString()}',
+        message: 'ایجاد پروفایل کاربری ناموفق بود: ${e.toString()}',
         backgroundColor: Colors.redAccent,
         icon: Icons.error,
       );
@@ -243,7 +246,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   SizedBox(height: 15),
                   Text(
-                    _isSignUp ? 'Create Account' : 'Welcome Back!',
+                    _isSignUp ? 'ایجاد حساب کاربری' : 'خوش آمدید',
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
@@ -254,9 +257,13 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 16),
                   Text(
                     _isSignUp
-                        ? 'Sign up to get started'
-                        : 'Login to your account',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[400]),
+                        ? 'برای شروع ثبت نام کنید'
+                        : 'وارد حساب کاربری خود شوید',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[400],
+                      fontFamily: 'SM',
+                    ),
                   ),
                   const SizedBox(height: 32),
                   if (_isSignUp) ...[
@@ -302,8 +309,8 @@ class _LoginPageState extends State<LoginPage> {
                   TextFormField(
                     controller: _emailController,
                     decoration: InputDecoration(
-                      labelText: 'Email',
-                      hintText: 'Enter your email',
+                      labelText: 'ایمیل',
+                      hintText: 'ایمیل خود را وارد کنید',
                       prefixIcon: const Icon(Icons.email_outlined),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -329,10 +336,10 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Please enter your email';
+                        return 'لطفا ایمیل خود را وارد کنید';
                       }
                       if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                        return 'Please enter a valid email';
+                        return 'لطفا یک ایمیل معتبر وارد کنید';
                       }
                       return null;
                     },
@@ -344,8 +351,8 @@ class _LoginPageState extends State<LoginPage> {
                     controller: _passwordController,
                     obscureText: _obscurePassword,
                     decoration: InputDecoration(
-                      labelText: 'Password',
-                      hintText: 'Enter your password',
+                      labelText: 'رمز عبور',
+                      hintText: 'رمز عبور خود را وارد کنید',
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -384,10 +391,10 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return 'Please enter your password';
+                        return 'لطفا رمز عبور خود را وارد کنید';
                       }
                       if (value.length < 6) {
-                        return 'Password must be at least 6 characters long';
+                        return 'رمز عبور باید حداقل 6 کاراکتر داشته باشد';
                       }
                       return null;
                     },
@@ -423,7 +430,7 @@ class _LoginPageState extends State<LoginPage> {
                               ).colorScheme.secondary,
                             ),
                             Text(
-                              'Remember Me',
+                              'مرا به خاطر بسپار',
                               style: TextStyle(color: Colors.grey[400]),
                             ),
                           ],
@@ -436,7 +443,7 @@ class _LoginPageState extends State<LoginPage> {
                                   CustomSnackbar.show(
                                     context: context,
                                     message:
-                                        'Please enter your email to reset password.',
+                                        'لطفا ایمیل خود را برای تنظیم مجدد رمز عبور وارد کنید.',
                                     backgroundColor: Colors.orange,
                                     icon: Icons.info,
                                   );
@@ -453,7 +460,7 @@ class _LoginPageState extends State<LoginPage> {
                                     CustomSnackbar.show(
                                       context: context,
                                       message:
-                                          'Password reset link sent to your email.',
+                                          'لینک بازنشانی رمز عبور به ایمیل شما ارسال شد.',
                                       backgroundColor: Colors.green,
                                       icon: Icons.email,
                                     );
@@ -463,7 +470,7 @@ class _LoginPageState extends State<LoginPage> {
                                     CustomSnackbar.show(
                                       context: context,
                                       message:
-                                          'Failed to send reset link: ${e.toString()}',
+                                          'ارسال لینک بازنشانی ناموفق بود: ${e.toString()}',
                                       backgroundColor: Colors.redAccent,
                                       icon: Icons.error,
                                     );
@@ -472,7 +479,7 @@ class _LoginPageState extends State<LoginPage> {
                                   setState(() => _isLoading = false);
                                 }
                               },
-                        child: const Text('Forgot password?'),
+                        child: const Text('رمز عبور را فراموش کرده اید'),
                       ),
                     ],
                   ),
@@ -491,7 +498,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
                         : Text(
-                            _isSignUp ? 'Sign Up' : 'Login',
+                            _isSignUp ? 'ثبت نام' : 'ورود',
                             style: const TextStyle(fontSize: 18),
                           ),
                   ),
@@ -507,8 +514,8 @@ class _LoginPageState extends State<LoginPage> {
                     },
                     child: Text(
                       _isSignUp
-                          ? 'Already have an account? Login'
-                          : 'Don\'t have an account? Sign Up',
+                          ? 'قبلاً حساب کاربری دارید؟ ورود'
+                          : 'حساب کاربری ندارید؟ ثبت نام کنید',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.secondary,
                       ),

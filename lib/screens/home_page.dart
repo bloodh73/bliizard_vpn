@@ -93,7 +93,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _handleConnectDisconnect() async {
     final appState = AppState.instance;
     if (appState.selectedServer == null) {
-      _showErrorSnackbar('Please select a server first.');
+      _showErrorSnackbar('لطفا ابتدا سرور را انتخاب کنید.');
       return;
     }
 
@@ -111,12 +111,12 @@ class _HomePageState extends State<HomePage> {
               remark: appState.selectedServer!.remark,
             );
           } else {
-            _showErrorSnackbar('Permission denied. Cannot connect to VPN.'); //
+            _showErrorSnackbar('اجازه رد شد. نمی‌توان به VPN متصل شد..'); //
           }
         }
       }
     } catch (e) {
-      _showErrorSnackbar('Connection error: $e');
+      _showErrorSnackbar('خطای اتصال: $e');
     } finally {
       setState(() => isConnecting = false);
     }
@@ -135,7 +135,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Permission Denied')));
+        ).showSnackBar(const SnackBar(content: Text('دسترسی رد شد')));
       }
     }
   }
@@ -149,7 +149,7 @@ class _HomePageState extends State<HomePage> {
       coreVersion = await flutterV2ray.getCoreVersion();
       setState(() {});
     } catch (e) {
-      _showErrorSnackbar('Failed to initialize V2Ray: $e');
+      _showErrorSnackbar('مقداردهی اولیه V2Ray انجام نشد: $e');
     }
   }
 
@@ -185,7 +185,7 @@ class _HomePageState extends State<HomePage> {
         setState(() => userProfile = response);
       }
     } catch (e) {
-      _showErrorSnackbar('Failed to load profile: $e');
+      _showErrorSnackbar('بارگیری پروفایل ناموفق بود: $e');
     } finally {
       setState(() => isProfileLoading = false);
     }
@@ -228,12 +228,12 @@ class _HomePageState extends State<HomePage> {
       // Check data usage
       if (dataLimit > 0 && dataUsage >= dataLimit) {
         if (mounted) {
-          _showErrorSnackbar('Subscription data exhausted!');
+          _showErrorSnackbar('اطلاعات اشتراک تمام شد!');
         }
         await flutterV2ray.stopV2Ray();
       }
     } catch (e) {
-      debugPrint('Error checking user status: $e');
+      debugPrint('خطا در بررسی وضعیت کاربر: $e');
     }
   }
 
@@ -254,14 +254,14 @@ class _HomePageState extends State<HomePage> {
         });
       }
     } catch (e) {
-      debugPrint('Error updating user profile: $e');
+      debugPrint('خطا در به‌روزرسانی پروفایل کاربر: $e');
     }
   }
 
   void _showSubscriptionExpiredSnackbar() {
     CustomSnackbar.show(
       context: context,
-      message: 'Your subscription has expired. Please renew to continue.',
+      message: 'اشتراک شما منقضی شده است. برای ادامه، لطفاً تمدید کنید.',
       backgroundColor: Colors.orange,
       icon: Icons.warning,
       duration: const Duration(seconds: 5),
@@ -287,7 +287,7 @@ class _HomePageState extends State<HomePage> {
       }
 
       if (!_isValidV2RayUrl(subscriptionLink)) {
-        throw Exception('Invalid URL format: $subscriptionLink');
+        throw Exception('آدرس اینترنتی نامعتبر است: $subscriptionLink');
       }
 
       final servers = await _downloadAndParseSubscription(subscriptionLink);
@@ -297,7 +297,7 @@ class _HomePageState extends State<HomePage> {
         appState.selectedServer = servers.isNotEmpty ? servers.first : null;
       });
     } catch (e) {
-      _showErrorSnackbar('Error loading subscription: ${e.toString()}');
+      _showErrorSnackbar('خطا در بارگیری اشتراک: ${e.toString()}');
       await _tryFallbackConnection(appState);
     } finally {
       setState(() => isRefreshing = false);
@@ -322,7 +322,7 @@ class _HomePageState extends State<HomePage> {
       if (url.startsWith('http')) {
         final response = await http.get(Uri.parse(url));
         if (response.statusCode != 200) {
-          throw Exception('Failed to download subscription');
+          throw Exception('دانلود اشتراک ناموفق بود');
         }
         final content = String.fromCharCodes(base64Decode(response.body));
         final servers = content.split('\n');
@@ -332,7 +332,7 @@ class _HomePageState extends State<HomePage> {
             try {
               validServers.add(FlutterV2ray.parseFromURL(server));
             } catch (e) {
-              debugPrint('Failed to parse server: $server, Error: $e');
+              debugPrint('سرور تجزیه نشد: $server, Error: $e');
             }
           }
         }
@@ -356,11 +356,11 @@ class _HomePageState extends State<HomePage> {
           appState.selectedServer = fallbackServers.first;
         });
         _showErrorSnackbar(
-          'Failed to load subscription, using fallback server.',
+          'بارگیری اشتراک، با استفاده از سرور جایگزین، ناموفق بود.',
         );
       }
     } catch (e) {
-      _showErrorSnackbar('Failed to load fallback server: $e');
+      _showErrorSnackbar('بارگیری سرور پشتیبان ناموفق بود: $e');
     }
   }
 
@@ -402,7 +402,7 @@ class _HomePageState extends State<HomePage> {
                   }
                   Navigator.of(context).pop();
                 },
-                child: const Text('Submit'),
+                child: const Text('ارسال کنید'),
               ),
             ],
           ),
@@ -419,7 +419,7 @@ class _HomePageState extends State<HomePage> {
         Navigator.pushReplacementNamed(context, '/login');
       }
     } catch (e) {
-      _showErrorSnackbar('Logout failed: $e');
+      _showErrorSnackbar('خروج ناموفق بود: $e');
     }
   }
 
@@ -475,7 +475,7 @@ class _HomePageState extends State<HomePage> {
                   0.2,
                 ), // Lighter circle avatar
                 child: Text(
-                  userProfile?['full_name'][0]?.toUpperCase() ?? 'U',
+                  userProfile?['full_name']?.toUpperCase() ?? 'شما',
                   style: const TextStyle(fontSize: 32, color: Colors.white),
                 ),
               ),
@@ -491,7 +491,7 @@ class _HomePageState extends State<HomePage> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Subscription Expired! Please renew.',
+                        'اشتراک منقضی شده است! لطفا تمدید کنید.',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -510,7 +510,7 @@ class _HomePageState extends State<HomePage> {
                     title: 'تاریخ انقضا',
                     value: userProfile?['expiry_date'] != null
                         ? date_utils.formatToJalali(userProfile!['expiry_date'])
-                        : 'Not Set',
+                        : 'تنظیم نشده',
                   ),
                   _buildDrawerDivider(),
                   _buildDrawerItem(
@@ -585,6 +585,15 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
+            Text(
+              'Hamed Karimi Zadeh',
+              style: TextStyle(
+                color: Colors.grey.shade200,
+                fontFamily: 'GB',
+                fontSize: 10,
+              ),
+            ),
+            SizedBox(height: 10),
           ],
         ),
       ),
@@ -675,7 +684,7 @@ class _HomePageState extends State<HomePage> {
         surfaceTintColor: CustomColor.primery, // Using CustomColor
         backgroundColor: CustomColor.primery, // Using CustomColor
         title: Text(
-          userProfile?['full_name'] ?? 'Guest',
+          userProfile?['full_name'] ?? 'مهمان',
           style: const TextStyle(
             color: Colors.white, // Changed to white for better contrast
             fontFamily: 'SM',
@@ -709,7 +718,7 @@ class _HomePageState extends State<HomePage> {
               showAboutDialog(
                 context: context,
                 applicationName: 'Blizzard VPN',
-                applicationVersion: '1.0.0',
+                applicationVersion: '1.0.1',
                 applicationLegalese: '© 2025 Blizzard VPN',
                 children: [
                   Text('Core Version: ${coreVersion ?? 'N/A'}'),
@@ -954,7 +963,7 @@ class _HomePageState extends State<HomePage> {
                 },
               ),
             ),
-            const SizedBox(height: 20), // More space between cards
+            // const SizedBox(height: 10), // More space between cards
             CustomCard(
               title: 'اطلاعات سرور',
               child: Column(
@@ -986,7 +995,7 @@ class _HomePageState extends State<HomePage> {
                     trailing: Icon(
                       Icons.arrow_forward_ios,
                       size: 25, // Slightly smaller arrow
-                      color: CustomColor.darkBackground, // Using CustomColor
+                      color: CustomColor.secondary, // Using CustomColor
                     ),
                     // trailing: RotatedBox(
                     //   quarterTurns: 5,
@@ -1060,7 +1069,7 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            // const SizedBox(height: 10),
             CustomCard(
               title: 'وضعیت اشتراک',
               child: Column(
@@ -1069,8 +1078,8 @@ class _HomePageState extends State<HomePage> {
                     'لینک سابسکریپشن:',
                     appState.subscriptionLink != null &&
                             appState.subscriptionLink!.isNotEmpty
-                        ? 'Loaded'
-                        : 'Not Loaded',
+                        ? '✅'
+                        : '❌',
                     appState.subscriptionLink != null &&
                             appState.subscriptionLink!.isNotEmpty
                         ? Colors.green.shade600
@@ -1080,11 +1089,8 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 12), // More space between rows
                   _buildStatusRow(
                     'وضعیت پروفایل:',
-                    isProfileLoading
-                        ? 'Loading...'
-                        : userProfile != null
-                        ? 'Loaded'
-                        : 'Not Loaded',
+
+                    userProfile != null ? '✅' : '❌',
                     userProfile != null
                         ? Colors.green.shade600
                         : Colors.red.shade600,
