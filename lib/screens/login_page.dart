@@ -148,7 +148,7 @@ class _LoginPageState extends State<LoginPage> {
           Navigator.pushReplacementNamed(context, '/home');
         }
       }
-    } on AuthException catch (e) {
+    } on AuthException {
       setState(
         () => _errorMessage = _parseAuthError('کاربری با این ایمیل وجود ندارد'),
       );
